@@ -216,6 +216,7 @@ function AuthedApp({ user }: { user: User }) {
           activePatientName={state.activePatient ? fullName(state.activePatient) : null}
           onOpenRecord={() => state.open('record')}
           onSend={state.sendChat}
+          disabled={state.chatThinking}
         />
       )}
 

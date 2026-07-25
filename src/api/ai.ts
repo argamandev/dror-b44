@@ -36,10 +36,25 @@ interface AgentMsg {
   tool_calls?: { status?: string }[];
 }
 
+// Tool-call statuses that mean the agent is still mid-loop — a reply seen
+// while any tool call is in one of these states isn't final yet.
+const NON_TERMINAL_TOOL_STATUSES = new Set(['running', 'waiting_for_user_input']);
+
 function assistantText(m: AgentMsg): string | null {
   if (m.role !== 'assistant') return null;
   const c = m.content;
-  const text = typeof c === 'string' ? c : '';
+  let text = '';
+  if (typeof c === 'string') {
+    text = c;
+  } else if (c && typeof c === 'object') {
+    // Some content shapes come back as an object rather than a plain string.
+    // Prefer a `.text` field when present; only fall back to stringifying
+    // the whole object when there's no `.text` to prefer. If neither yields
+    // text, this isn't treated as a (empty) reply — return null so the
+    // caller keeps waiting instead of resolving on an empty string.
+    const obj = c as Record<string, unknown>;
+    text = typeof obj.text === 'string' ? obj.text : JSON.stringify(c);
+  }
   return text.trim() ? text : null;
 }
 
@@ -85,7 +100,9 @@ function waitForReply(conversationId: string, priorAssistantCount: number): Prom
       const answers = msgs.map(assistantText).filter((t): t is string => t !== null);
       // Only accept a NEW assistant reply (beyond any that predated our message).
       if (answers.length <= priorAssistantCount) return;
-      const stillRunning = msgs.some((m) => (m.tool_calls ?? []).some((t) => t?.status === 'running'));
+      const stillRunning = msgs.some((m) =>
+        (m.tool_calls ?? []).some((t) => !!t?.status && NON_TERMINAL_TOOL_STATUSES.has(t.status))
+      );
       if (stillRunning) return; // agent is still working a tool call — keep waiting
       const latest = answers[answers.length - 1];
       // Debounce: wait briefly for any follow-up turn before committing.

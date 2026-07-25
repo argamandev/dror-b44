@@ -10,6 +10,8 @@ interface ChatBarProps {
   activePatientName: string | null;
   onOpenRecord: () => void;
   onSend: (text: string, fromHome: boolean) => void;
+  /** True while a reply is in flight — blocks new sends but keeps the input editable. */
+  disabled?: boolean;
 }
 
 const barStyle: CSSProperties = {
@@ -53,7 +55,14 @@ const sendBtn: CSSProperties = {
   cursor: 'pointer',
 };
 
-export default function ChatBar({ screen, activePatientName, onOpenRecord, onSend }: ChatBarProps) {
+const sendBtnDisabled: CSSProperties = {
+  ...sendBtn,
+  opacity: 0.4,
+  cursor: 'default',
+  pointerEvents: 'none',
+};
+
+export default function ChatBar({ screen, activePatientName, onOpenRecord, onSend, disabled = false }: ChatBarProps) {
   const [text, setText] = useState('');
 
   const placeholder =
@@ -64,6 +73,7 @@ export default function ChatBar({ screen, activePatientName, onOpenRecord, onSen
         : 'כתוב לדרור…';
 
   const handleSend = () => {
+    if (disabled) return;
     const trimmed = text.trim();
     if (!trimmed) return;
     onSend(trimmed, screen === 'home');
@@ -100,7 +110,12 @@ export default function ChatBar({ screen, activePatientName, onOpenRecord, onSen
             </svg>
           </div>
         </div>
-        <div onClick={handleSend} title="שליחה" style={sendBtn}>
+        <div
+          onClick={disabled ? undefined : handleSend}
+          title="שליחה"
+          aria-disabled={disabled}
+          style={disabled ? sendBtnDisabled : sendBtn}
+        >
           <svg viewBox="0 0 24 24" fill="none" width={18} height={18}>
             <path
               d="M12 19V5M12 5l-6 6M12 5l6 6"

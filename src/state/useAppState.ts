@@ -14,6 +14,7 @@ import {
 } from '@/api/data';
 import { askDror } from '@/api/ai';
 import { fullName, sessionCount } from '@/api/format';
+import { deriveChatScope, type LiveChatLike } from '@/state/chatScope';
 
 export type Screen = 'home' | 'profile' | 'world' | 'chat' | 'draft';
 export type Overlay = null | 'menu' | 'search' | 'record' | 'voice' | 'flow' | 'settings' | 'appSettings';
@@ -64,6 +65,10 @@ export function useAppState() {
   const activeIdRef = useRef<string | null>(null);
   // Same idea for the live chat — sendChat reads/continues it across awaits.
   const activeChatRef = useRef<ActiveChat>(EMPTY_CHAT);
+  // Mirrors chatThinking synchronously so sendChat can guard against a second
+  // send firing while an agent reply is still in flight (state updates aren't
+  // visible mid-closure across the awaits in the first send).
+  const chatThinkingRef = useRef(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const setActiveIdBoth = useCallback((id: string | null) => {
@@ -74,6 +79,11 @@ export function useAppState() {
   const setActiveChatBoth = useCallback((c: ActiveChat) => {
     activeChatRef.current = c;
     setActiveChat(c);
+  }, []);
+
+  const setChatThinkingBoth = useCallback((v: boolean) => {
+    chatThinkingRef.current = v;
+    setChatThinking(v);
   }, []);
 
   const showToast = useCallback((text: string) => {
@@ -132,7 +142,7 @@ export function useAppState() {
       // Opening a patient's world starts a fresh conversational context, the
       // same way the mock's goProfile clears chatMsgs (mock line 727).
       setActiveChatBoth(EMPTY_CHAT);
-      setChatThinking(false);
+      setChatThinkingBoth(false);
       await refreshEntries();
       setScreen('profile');
     },
@@ -179,18 +189,29 @@ export function useAppState() {
   // but the reply is the real agent, and each exchange is persisted as a Chat.
   const sendChat = useCallback(
     async (raw: string, fromHome: boolean) => {
+      // Concurrent-send guard: while a reply is in flight, sends are inert.
+      // Uses the ref (not the `chatThinking` state) because state updates
+      // from the in-flight send aren't visible in this closure until a
+      // re-render — the ref is written synchronously below and on resolve.
+      if (chatThinkingRef.current) return;
+
       const text = raw.trim();
       if (!text) return;
 
-      const patientId = fromHome ? '' : activeIdRef.current ?? '';
+      // The live chat on screen (if any) is the source of truth for scope —
+      // follow-ups always continue that chat, regardless of a leftover
+      // activeId from a previously-viewed patient. Only a brand-new chat
+      // (nothing live yet) falls back to fromHome/activeId.
+      const cur = activeChatRef.current;
+      const live: LiveChatLike = { patientId: cur.patientId, started: !!(cur.id || cur.messages.length) };
+      const patientId = deriveChatScope(fromHome, live, activeIdRef.current);
       const patient = patients.find((p) => p.id === patientId) ?? null;
       const patientName = patient ? fullName(patient) : undefined;
       const userMsg: ChatMsg = { role: 'user', text, ts: new Date().toISOString() };
 
-      // Continue the open conversation only when the patient scope matches;
-      // otherwise this is a brand-new chat.
-      const cur = activeChatRef.current;
-      const continuing = cur.messages.length > 0 && cur.patientId === patientId;
+      // Continuing the open conversation is exactly the "live" case above —
+      // deriveChatScope already guarantees patientId === cur.patientId then.
+      const continuing = live.started;
       const base: ActiveChat = continuing ? cur : { ...EMPTY_CHAT, patientId };
       const withUser: ActiveChat = { ...base, messages: [...base.messages, userMsg] };
       setActiveChatBoth(withUser);
@@ -198,7 +219,7 @@ export function useAppState() {
       if (fromHome) {
         setHomeOrb('thinking');
       } else {
-        setChatThinking(true);
+        setChatThinkingBoth(true);
         setScreen('chat');
       }
 
@@ -215,14 +236,14 @@ export function useAppState() {
         conversationId = res.conversationId;
       } catch {
         setHomeOrb('idle');
-        setChatThinking(false);
+        setChatThinkingBoth(false);
         setScreen('chat'); // keep the user's message visible even on failure
         showToast(ASK_ERROR);
         return;
       }
 
       setHomeOrb('idle');
-      setChatThinking(false);
+      setChatThinkingBoth(false);
 
       // Stale guard: if the user navigated away or switched chats while the
       // agent was thinking, don't yank them back — just persist the exchange.
@@ -262,7 +283,7 @@ export function useAppState() {
         showToast(SAVE_ERROR);
       }
     },
-    [patients, setActiveChatBoth, setHomeOrb, showToast, refreshChats, refreshEntries]
+    [patients, setActiveChatBoth, setChatThinkingBoth, setHomeOrb, showToast, refreshChats, refreshEntries]
   );
 
   // Open a chat from the MenuDrawer history: load its messages, resume its agent
@@ -282,7 +303,7 @@ export function useAppState() {
         patientId,
         messages: chat.messages ?? [],
       });
-      setChatThinking(false);
+      setChatThinkingBoth(false);
       setScreen('chat');
     },
     [setActiveIdBoth, setActiveChatBoth, refreshEntries]
@@ -293,14 +314,14 @@ export function useAppState() {
   const leaveChat = useCallback(() => {
     const pid = activeChatRef.current.patientId;
     setActiveChatBoth(EMPTY_CHAT);
-    setChatThinking(false);
+    setChatThinkingBoth(false);
     setScreen(pid && activeIdRef.current ? 'profile' : 'home');
   }, [setActiveChatBoth]);
 
   // "שיחה חדשה" from the menu: drop any open chat and go Home.
   const newChat = useCallback(() => {
     setActiveChatBoth(EMPTY_CHAT);
-    setChatThinking(false);
+    setChatThinkingBoth(false);
     setActiveIdBoth(null);
     setScreen('home');
   }, [setActiveChatBoth, setActiveIdBoth]);
