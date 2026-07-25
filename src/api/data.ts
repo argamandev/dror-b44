@@ -35,12 +35,7 @@ export interface Chat {
 }
 
 // Auth wrapper — method names/shapes follow the documented @base44/sdk AuthModule
-// (base44.auth.register/verifyOtp/loginViaEmailPassword/me/logout), not the brief's
-// original signup() sketch. register() takes an optional fullName for UI symmetry;
-// RegisterParams itself has no full_name field (see docs/context/base44-facts.md
-// section 3), so it's forwarded best-effort and not guaranteed to persist — callers
-// that need the display name to stick should call base44.auth.updateMe({ full_name })
-// once the user is authenticated (after verifyOtp + login).
+// (base44.auth.register/verifyOtp/loginViaEmailPassword/me/logout).
 export const auth = {
   me: (): Promise<{ email: string; full_name?: string } | null> =>
     base44.auth.me()
@@ -50,13 +45,11 @@ export const auth = {
   login: (email: string, password: string): Promise<void> =>
     base44.auth.loginViaEmailPassword(email, password).then(() => undefined),
 
-  register: (email: string, password: string, fullName?: string): Promise<void> => {
-    const params: Record<string, unknown> = { email, password };
-    if (fullName) params.full_name = fullName;
-    return base44.auth
-      .register(params as unknown as Parameters<typeof base44.auth.register>[0])
-      .then(() => undefined);
-  },
+  register: (email: string, password: string): Promise<void> =>
+    base44.auth.register({ email, password }).then(() => undefined),
+
+  updateMe: (fields: { full_name?: string }): Promise<void> =>
+    base44.auth.updateMe(fields).then(() => undefined),
 
   verifyOtp: (email: string, otp: string): Promise<void> =>
     base44.auth.verifyOtp({ email, otpCode: otp }).then(() => undefined),

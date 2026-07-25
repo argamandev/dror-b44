@@ -1,6 +1,14 @@
+const IL_DATE = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Jerusalem', day: 'numeric', month: '2-digit', year: 'numeric',
+});
+
 export function fmtDate(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}`;
+  const parts = IL_DATE.formatToParts(new Date(iso));
+  const get = (t: string) => {
+    const val = parts.find(p => p.type === t)?.value ?? '';
+    return val.replace(/^0+/, '') || '0'; // strip leading zeros, but keep at least one '0'
+  };
+  return `${get('day')}.${get('month')}.${get('year')}`;
 }
 
 export function fmtTimer(sec: number): string {

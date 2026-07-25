@@ -5,6 +5,9 @@ describe('format helpers', () => {
   it('formats ISO date as d.m.yyyy', () => {
     expect(fmtDate('2026-07-25T10:00:00.000Z')).toBe('25.7.2026');
   });
+  it('timezone-deterministic across day boundary (IDT)', () => {
+    expect(fmtDate('2026-07-24T22:30:00.000Z')).toBe('25.7.2026');
+  });
   it('formats seconds as mm:ss', () => {
     expect(fmtTimer(0)).toBe('00:00');
     expect(fmtTimer(65)).toBe('01:05');
