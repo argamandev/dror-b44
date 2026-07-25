@@ -7,9 +7,10 @@
 // איתי (18 sessions), נועה (12), דניאל (7), מיכל (23). "Sessions" = non-draft
 // summary Entry count, matching src/api/format.ts `sessionCount()`.
 //
-// Idempotent + convergent: a patient whose first name already exists is never
-// re-created; entries are topped up to the target count. Re-running this
-// script creates 0 new records once targets are met.
+// Idempotent + convergent: an existing matching patient is never re-created
+// (matched on full name, or on first name alone only when that's unambiguous —
+// see findPatientMatch below); entries are topped up to the target count.
+// Re-running this script creates 0 new records once targets are met.
 
 interface PatientRow {
   id: string;
@@ -151,15 +152,32 @@ const PATIENTS: PatientConfig[] = [
 // Main
 // ---------------------------------------------------------------------------
 
-async function findPatientByFirstName(firstName: string): Promise<PatientRow | null> {
+// Safer-than-first-name-only matching: a full name (first+last) match is exact.
+// A first-name-only fallback is used ONLY when the seed target itself defines no
+// last name AND exactly one existing patient has that first name (unambiguous).
+// Any other case (0 or 2+ same-first-name patients, or a last-name mismatch)
+// creates a new patient rather than silently topping up entries onto what might
+// be someone else's real record.
+async function findPatientMatch(cfg: PatientConfig): Promise<PatientRow | null> {
   const all: PatientRow[] = await base44.entities.Patient.list();
-  return all.find((p) => (p.first_name ?? '').trim() === firstName) ?? null;
+  const wantLast = (cfg.lastName ?? '').trim();
+
+  if (wantLast) {
+    return (
+      all.find(
+        (p) => (p.first_name ?? '').trim() === cfg.firstName && (p.last_name ?? '').trim() === wantLast
+      ) ?? null
+    );
+  }
+
+  const byFirstName = all.filter((p) => (p.first_name ?? '').trim() === cfg.firstName);
+  return byFirstName.length === 1 ? byFirstName[0] : null;
 }
 
 async function ensurePatient(
   cfg: PatientConfig
 ): Promise<{ patient: PatientRow; wasCreated: boolean }> {
-  const existing = await findPatientByFirstName(cfg.firstName);
+  const existing = await findPatientMatch(cfg);
   if (existing) return { patient: existing, wasCreated: false };
   const created: PatientRow = await base44.entities.Patient.create({
     first_name: cfg.firstName,

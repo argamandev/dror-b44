@@ -25,14 +25,18 @@ Product/company predate this week (dror-ai.com); this repo and its backend are b
   installed at `C:\Users\Sagi\.deno` from Task 7). Seeds the four demo patients from the design
   mock (`Dror.dc.html` lines 565-589): איתי (18 sessions), נועה (12), דניאל (7), מיכל (23), where
   "sessions" = non-draft `summary` Entry count (`sessionCount()` in `src/api/format.ts`).
-  Idempotent and **convergent**: a patient is matched by first name and never re-created (so the
-  leftover Task-7 smoke-test patient "איתי לוי" is reused, not duplicated); entries are topped up
+  Idempotent and **convergent**: a patient is matched on full name (first+last) exactly, falling
+  back to first-name-only ONLY when the seed target itself has no last name AND exactly one
+  existing patient shares that first name (otherwise a new patient is created, so the script can
+  never silently top up synthetic entries onto an unrelated same-first-name record) — so the
+  leftover Task-7 smoke-test patient "איתי לוי" is reused, not duplicated; entries are topped up
   weekly-backwards from the mock's anchor date (2026-07-21) to reach each target count, skipping
   any date already occupied. איתי's three verbatim mock entries (two real summaries + one real
   doc, mock lines 567-569) are inserted by exact title match if missing. Re-running the script
   after targets are met creates 0 new records — verified by running it twice.
 
-  **Real output, first run** (created 16+12+7+23 = 58 new entries + 3 new patients):
+  **Real output, first run** (created 16+12+7+23 = 58 non-draft summary entries, + 1 doc entry
+  for איתי's verbatim "אישור טיפול" letter = **59 new entries total**, + 3 new patients):
   ```
   Final seed summary (non-draft summary counts = "sessions"):
   Patient         Target  Existing  Created
@@ -52,12 +56,17 @@ Product/company predate this week (dror-ai.com); this repo and its backend are b
   ```
   Post-seed spot check confirmed exact in-app `sessionCount` values: 18/12/7/23.
 
-- **`scripts/verify-rls.ts`** (same `exec` invocation) — the scripted half of the privacy pass:
-  (a) `Patient.list()` from this account returns exactly the 4 seeded patients, nothing more;
-  (b) `Entry.filter({ patient_id: <nonexistent-id> })` returns `[]`;
+- **`scripts/verify-rls.ts`** (same `exec` invocation) — the scripted half of the privacy pass.
+  Of its four checks, **(a) and (d) are the scoping-relevant evidence**; (b) and (c) are included
+  for completeness but do not by themselves demonstrate access control:
+  (a) `Patient.list()` from this account returns exactly the 4 seeded patients, nothing more — this
+  is the one that actually shows reads are limited to this account's own records;
+  (b) `Entry.filter({ patient_id: <nonexistent-id> })` returns `[]` — this only tests **not-found
+  handling**: a nonexistent id returns nothing regardless of whether RLS is enabled at all, so it
+  is not evidence of access control;
   (c) `Patient.get(<fabricated 24-char id>)` **throws** a 404 ("Entity Patient with ID … not
-  found") rather than returning a record — notably indistinguishable from a genuinely-missing id,
-  which is itself a good privacy property (no existence leak via a different error shape);
+  found") — same caveat as (b): a fabricated/nonexistent id 404s whether or not RLS is enabled, so
+  this also tests not-found handling, not access control;
   (d) ownership stamping — **finding**: the live Patient API response does **not** populate a
   `created_by` (email) field at all, only `created_by_id`, despite the SDK docs' `ServerEntityFields`
   type listing `created_by?: string | null` as a server field. The script falls back to comparing
