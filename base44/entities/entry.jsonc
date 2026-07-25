@@ -1,0 +1,20 @@
+{
+  "name": "Entry", "type": "object", "title": "פריט",
+  "properties": {
+    "patient_id":       { "type": "string" },
+    "type":             { "type": "string", "enum": ["summary", "doc", "rec"] },
+    "title":            { "type": "string" },
+    "entry_date":       { "type": "string" },
+    "body":             { "type": "string", "default": "" },
+    "is_draft":         { "type": "boolean", "default": false },
+    "duration_seconds": { "type": "integer", "default": 0 },
+    "transcript":       { "type": "string", "default": "" }
+  },
+  "required": ["patient_id", "type", "title", "entry_date"],
+  "rls": {
+    "create": true,
+    "read":   { "created_by": "{{user.email}}" },
+    "update": { "created_by": "{{user.email}}" },
+    "delete": { "created_by": "{{user.email}}" }
+  }
+}

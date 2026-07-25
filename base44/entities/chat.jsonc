@@ -1,0 +1,19 @@
+{
+  "name": "Chat", "type": "object", "title": "שיחה",
+  "properties": {
+    "title":      { "type": "string" },
+    "patient_id": { "type": "string", "default": "" },
+    "messages":   { "type": "array", "items": { "type": "object", "properties": {
+      "role": { "type": "string", "enum": ["user", "dror"] },
+      "text": { "type": "string" },
+      "ts":   { "type": "string" }
+    } }, "default": [] }
+  },
+  "required": ["title"],
+  "rls": {
+    "create": true,
+    "read":   { "created_by": "{{user.email}}" },
+    "update": { "created_by": "{{user.email}}" },
+    "delete": { "created_by": "{{user.email}}" }
+  }
+}

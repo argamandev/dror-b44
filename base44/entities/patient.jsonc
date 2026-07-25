@@ -1,0 +1,15 @@
+{
+  "name": "Patient", "type": "object", "title": "מטופל",
+  "properties": {
+    "first_name":    { "type": "string" },
+    "last_name":     { "type": "string" },
+    "context_notes": { "type": "string", "default": "" }
+  },
+  "required": ["first_name"],
+  "rls": {
+    "create": true,
+    "read":   { "created_by": "{{user.email}}" },
+    "update": { "created_by": "{{user.email}}" },
+    "delete": { "created_by": "{{user.email}}" }
+  }
+}
