@@ -13,6 +13,7 @@ import MenuDrawer from '@/overlays/MenuDrawer';
 import AppSettingsOverlay from '@/overlays/AppSettingsOverlay';
 import FlowOverlay from '@/overlays/FlowOverlay';
 import RecordOverlay from '@/overlays/RecordOverlay';
+import VoiceOverlay from '@/overlays/VoiceOverlay';
 import AppFrame from '@/components/AppFrame';
 import ChatBar from '@/components/ChatBar';
 import Toast from '@/components/Toast';
@@ -83,21 +84,8 @@ function ScreenPlaceholder({ onHome }: { onHome: () => void }) {
   );
 }
 
-// Overlays not built until later tasks — opening one just surfaces a toast
-// and closes itself again. 'search', 'settings', 'menu', 'appSettings',
-// 'flow' and 'record' are real and excluded here.
-const PLACEHOLDER_OVERLAYS = new Set(['voice']);
-
 function AuthedApp({ user }: { user: User }) {
   const state = useAppState();
-
-  useEffect(() => {
-    if (state.overlay && PLACEHOLDER_OVERLAYS.has(state.overlay)) {
-      state.showToast('בקרוב');
-      state.close();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.overlay]);
 
   const showChatBar = state.screen !== 'draft';
 
@@ -243,6 +231,19 @@ function AuthedApp({ user }: { user: User }) {
           setDraft={state.setDraft}
           goDraft={() => state.go('draft')}
           showToast={state.showToast}
+        />
+      )}
+
+      {state.overlay === 'voice' && (
+        <VoiceOverlay
+          patientId={undefined}
+          onClose={() => {
+            // Mirrors the design mock's goHomeClose (line 726) — voice is
+            // only ever opened from Home this week, so closing it always
+            // returns there.
+            state.go('home');
+            state.close();
+          }}
         />
       )}
 
