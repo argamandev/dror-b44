@@ -12,6 +12,7 @@ import PatientContextOverlay from '@/overlays/PatientContextOverlay';
 import MenuDrawer from '@/overlays/MenuDrawer';
 import AppSettingsOverlay from '@/overlays/AppSettingsOverlay';
 import FlowOverlay from '@/overlays/FlowOverlay';
+import RecordOverlay from '@/overlays/RecordOverlay';
 import AppFrame from '@/components/AppFrame';
 import ChatBar from '@/components/ChatBar';
 import Toast from '@/components/Toast';
@@ -83,9 +84,9 @@ function ScreenPlaceholder({ onHome }: { onHome: () => void }) {
 }
 
 // Overlays not built until later tasks — opening one just surfaces a toast
-// and closes itself again. 'search', 'settings', 'menu', 'appSettings' and
-// 'flow' are real and excluded here.
-const PLACEHOLDER_OVERLAYS = new Set(['record', 'voice']);
+// and closes itself again. 'search', 'settings', 'menu', 'appSettings',
+// 'flow' and 'record' are real and excluded here.
+const PLACEHOLDER_OVERLAYS = new Set(['voice']);
 
 function AuthedApp({ user }: { user: User }) {
   const state = useAppState();
@@ -229,6 +230,18 @@ function AuthedApp({ user }: { user: User }) {
             state.close();
             state.go('draft');
           }}
+          showToast={state.showToast}
+        />
+      )}
+
+      {state.overlay === 'record' && (
+        <RecordOverlay
+          patients={state.patients}
+          onClose={() => state.close()}
+          refreshPatients={state.refreshPatients}
+          openPatient={state.openPatient}
+          setDraft={state.setDraft}
+          goDraft={() => state.go('draft')}
           showToast={state.showToast}
         />
       )}
