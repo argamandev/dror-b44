@@ -29,7 +29,17 @@ interface TtsFunctionResult {
 // utterance without the caller needing to know which mode is in flight.
 let activeStop: (() => void) | null = null;
 
+// Bumped by stopSpeaking() (and at the start of every speakHebrew() call, so
+// a fresh call always supersedes a stale one). speakHebrew's async steps
+// re-check their own snapshot against this counter before ever starting
+// playback — this is what makes stop() effective even when it's called while
+// the `tts` function's network request is still in flight (i.e. before
+// there's any audio/utterance yet for `activeStop` to cancel). Without it,
+// that in-flight reply would start playing right after the overlay closed.
+let generation = 0;
+
 export function stopSpeaking(): void {
+  generation++;
   const stop = activeStop;
   activeStop = null;
   stop?.();
@@ -45,8 +55,12 @@ export function stopSpeaking(): void {
   }
 }
 
-function speakBrowser(text: string): Promise<SpeakResult> {
+function speakBrowser(text: string, gen: number): Promise<SpeakResult> {
   return new Promise((resolve) => {
+    if (gen !== generation) {
+      resolve({ mode: 'browser' });
+      return;
+    }
     if (typeof window === 'undefined' || !window.speechSynthesis) {
       resolve({ mode: 'browser' });
       return;
@@ -81,8 +95,12 @@ function speakBrowser(text: string): Promise<SpeakResult> {
   });
 }
 
-function playAudioB64(audioB64: string, mime: string): Promise<SpeakResult> {
+function playAudioB64(audioB64: string, mime: string, gen: number): Promise<SpeakResult> {
   return new Promise((resolve) => {
+    if (gen !== generation) {
+      resolve({ mode: 'eleven' });
+      return;
+    }
     const audio = new Audio(`data:${mime};base64,${audioB64}`);
 
     let settled = false;
@@ -112,16 +130,30 @@ function playAudioB64(audioB64: string, mime: string): Promise<SpeakResult> {
 }
 
 export async function speakHebrew(text: string): Promise<SpeakResult> {
+  // A fresh call always supersedes whatever generation came before it —
+  // stopSpeaking() bumps this too, so a stop() that lands while the network
+  // request below is still in flight is caught by the check right after it,
+  // before any audio/utterance would otherwise start.
+  const gen = ++generation;
+
+  let data: TtsFunctionResult | undefined;
   try {
     const res = await base44.functions.invoke('tts', { text });
-    const data = res?.data as TtsFunctionResult | undefined;
-    if (data?.audio_b64 && data.mime) {
-      return await playAudioB64(data.audio_b64, data.mime);
-    }
-    // Malformed 200 body (shouldn't happen) — fall through to browser voice.
+    data = res?.data as TtsFunctionResult | undefined;
   } catch {
     // Non-2xx (503 no_key / 502 tts_failed / network error) — expected until
     // ELEVENLABS_API_KEY is configured; fall through to browser voice.
+    data = undefined;
   }
-  return speakBrowser(text);
+
+  if (gen !== generation) {
+    // Stopped (or superseded by a newer speakHebrew call) while the network
+    // request was in flight — resolve without ever starting playback.
+    return { mode: 'browser' };
+  }
+
+  if (data?.audio_b64 && data.mime) {
+    return playAudioB64(data.audio_b64, data.mime, gen);
+  }
+  return speakBrowser(text, gen);
 }
