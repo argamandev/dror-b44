@@ -8,6 +8,8 @@ import World from '@/screens/World';
 import DraftEditor from '@/screens/DraftEditor';
 import SearchOverlay from '@/overlays/SearchOverlay';
 import PatientContextOverlay from '@/overlays/PatientContextOverlay';
+import MenuDrawer from '@/overlays/MenuDrawer';
+import AppSettingsOverlay from '@/overlays/AppSettingsOverlay';
 import AppFrame from '@/components/AppFrame';
 import ChatBar from '@/components/ChatBar';
 import Toast from '@/components/Toast';
@@ -79,11 +81,11 @@ function ScreenPlaceholder({ onHome }: { onHome: () => void }) {
 }
 
 // Overlays not built until later tasks — opening one just surfaces a toast
-// and closes itself again. 'search' and 'settings' are real (this task) and
-// excluded here.
-const PLACEHOLDER_OVERLAYS = new Set(['menu', 'record', 'voice', 'flow', 'appSettings']);
+// and closes itself again. 'search', 'settings', 'menu' and 'appSettings'
+// are real and excluded here.
+const PLACEHOLDER_OVERLAYS = new Set(['record', 'voice', 'flow']);
 
-function AuthedApp() {
+function AuthedApp({ user }: { user: User }) {
   const state = useAppState();
 
   useEffect(() => {
@@ -174,6 +176,33 @@ function AuthedApp() {
         />
       )}
 
+      {state.overlay === 'menu' && (
+        <MenuDrawer
+          user={user}
+          chats={state.chats}
+          patients={state.patients}
+          onClose={() => state.close()}
+          onRefreshChats={state.refreshChats}
+          onNewChat={() => {
+            state.close();
+            state.go('home');
+          }}
+          onOpenSearch={() => state.open('search')}
+          onOpenChat={(chat) => {
+            state.close();
+            // Task 7 opens the conversation
+            if (chat.patient_id) {
+              state.openPatient(chat.patient_id);
+            } else {
+              state.go('home');
+            }
+          }}
+          onOpenSettings={() => state.open('appSettings')}
+        />
+      )}
+
+      {state.overlay === 'appSettings' && <AppSettingsOverlay user={user} onClose={() => state.close()} />}
+
       {showChatBar && (
         <ChatBar
           screen={state.screen}
@@ -233,5 +262,5 @@ export default function App() {
     return <Login onAuthed={refresh} />;
   }
 
-  return <AuthedApp />;
+  return <AuthedApp user={user} />;
 }

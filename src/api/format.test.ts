@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { chipLabel, fmtDate, fmtTimer, fullName, sessionCount } from './format';
+import { chipLabel, displayName, fmtDate, fmtTimer, fullName, sessionCount } from './format';
 
 describe('format helpers', () => {
   it('formats ISO date as d.m.yyyy', () => {
@@ -27,5 +27,11 @@ describe('format helpers', () => {
     expect(chipLabel('summary')).toBe('סיכום פגישה');
     expect(chipLabel('doc')).toBe('מסמך רשמי');
     expect(chipLabel('rec')).toBe('הקלטה');
+  });
+  it('resolves a display name, falling back to the email local part', () => {
+    expect(displayName({ email: 'dana@example.com', full_name: 'ד"ר דנה לוי' })).toBe('ד"ר דנה לוי');
+    expect(displayName({ email: 'dana@example.com' })).toBe('dana');
+    expect(displayName({ email: 'dana@example.com', full_name: '   ' })).toBe('dana');
+    expect(displayName(null)).toBe('');
   });
 });
