@@ -1,0 +1,145 @@
+import { base44 } from './base44Client';
+import type { AgentConversation } from '@base44/sdk';
+
+// Transport to the `dror` Base44 agent (base44/agents/dror.jsonc). The agent is
+// managed and conversational — the platform runs the tool-calling loop — so we
+// talk to it through the documented conversation API (base44-agents.md §Methods):
+//   createConversation -> addMessage -> subscribeToConversation / getConversation.
+// There is no token streaming; the UI shows a "דרור חושב…" state, then the full
+// reply. We resolve on the first completed agent reply to our message.
+
+const AGENT_NAME = 'dror';
+const REPLY_TIMEOUT_MS = 60000;
+// How long to wait, after a candidate answer appears and no tool call is still
+// running, before treating it as final (guards against resolving on an
+// intermediate turn while the agent is still mid-loop).
+const SETTLE_MS = 900;
+
+export interface AskDrorArgs {
+  message: string;
+  /** Patient this conversation is about; omit for a general (home) chat. */
+  patientId?: string;
+  /** Full name, used only to build the first-message context envelope. */
+  patientName?: string;
+  /** Resume an existing agent conversation instead of creating a new one. */
+  conversationId?: string;
+}
+
+export interface AskDrorResult {
+  answer: string;
+  conversationId: string;
+}
+
+interface AgentMsg {
+  role?: string;
+  content?: unknown;
+  tool_calls?: { status?: string }[];
+}
+
+function assistantText(m: AgentMsg): string | null {
+  if (m.role !== 'assistant') return null;
+  const c = m.content;
+  const text = typeof c === 'string' ? c : '';
+  return text.trim() ? text : null;
+}
+
+// Resolve with the agent's completed reply to the message we just sent. Uses the
+// realtime subscription (push) with a getConversation poll as a backstop, since
+// the subscription is WebSocket-based and can miss the terminal update.
+function waitForReply(conversationId: string, priorAssistantCount: number): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    let settled = false;
+    let settleTimer: ReturnType<typeof setTimeout> | undefined;
+    let unsubscribe: (() => void) | undefined;
+    let poll: ReturnType<typeof setInterval> | undefined;
+    let hardTimeout: ReturnType<typeof setTimeout> | undefined;
+
+    const cleanup = () => {
+      clearTimeout(settleTimer);
+      clearTimeout(hardTimeout);
+      if (poll) clearInterval(poll);
+      try {
+        unsubscribe?.();
+      } catch {
+        /* ignore */
+      }
+    };
+
+    const finish = (text: string) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(text);
+    };
+
+    const fail = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error('DROR_TIMEOUT'));
+    };
+
+    const evaluate = (conv: AgentConversation | undefined | null) => {
+      if (settled || !conv) return;
+      const msgs = (conv.messages ?? []) as AgentMsg[];
+      const answers = msgs.map(assistantText).filter((t): t is string => t !== null);
+      // Only accept a NEW assistant reply (beyond any that predated our message).
+      if (answers.length <= priorAssistantCount) return;
+      const stillRunning = msgs.some((m) => (m.tool_calls ?? []).some((t) => t?.status === 'running'));
+      if (stillRunning) return; // agent is still working a tool call — keep waiting
+      const latest = answers[answers.length - 1];
+      // Debounce: wait briefly for any follow-up turn before committing.
+      clearTimeout(settleTimer);
+      settleTimer = setTimeout(() => finish(latest), SETTLE_MS);
+    };
+
+    try {
+      unsubscribe = base44.agents.subscribeToConversation(conversationId, evaluate);
+    } catch {
+      /* fall back to polling only */
+    }
+
+    poll = setInterval(() => {
+      base44.agents.getConversation(conversationId).then(evaluate).catch(() => {});
+    }, 2500);
+
+    hardTimeout = setTimeout(fail, REPLY_TIMEOUT_MS);
+
+    // Kick once immediately in case the reply is already present.
+    base44.agents.getConversation(conversationId).then(evaluate).catch(() => {});
+  });
+}
+
+export async function askDror(args: AskDrorArgs): Promise<AskDrorResult> {
+  const { message, patientId, patientName, conversationId } = args;
+
+  // 1. Reuse or create the agent conversation.
+  const existing = conversationId ? await base44.agents.getConversation(conversationId) : undefined;
+  const conversation: AgentConversation =
+    existing ??
+    (await base44.agents.createConversation({
+      agent_name: AGENT_NAME,
+      ...(patientId ? { metadata: { patient_id: patientId } } : {}),
+    }));
+
+  const priorMessages = (conversation.messages ?? []) as AgentMsg[];
+
+  // 2. On the first message of a patient-scoped conversation, prefix a context
+  //    envelope so the agent knows which patient (and today's date) to work with.
+  //    Its entity tools then look the patient's records up by id.
+  let content = message;
+  if (patientId && priorMessages.length === 0) {
+    const today = new Date().toISOString().slice(0, 10);
+    const who = patientName ? `${patientName}, id ${patientId}` : `id ${patientId}`;
+    content = `[הקשר: השיחה עוסקת במטופל/ת ${who}. תאריך היום: ${today}]\n${message}`;
+  }
+
+  // 3. Count replies that predate our message so we can spot the new one.
+  const priorAssistantCount = priorMessages.map(assistantText).filter((t) => t !== null).length;
+
+  // 4. Send and await the agent's completed reply.
+  await base44.agents.addMessage(conversation, { role: 'user', content });
+  const answer = await waitForReply(conversation.id, priorAssistantCount);
+
+  return { answer, conversationId: conversation.id };
+}

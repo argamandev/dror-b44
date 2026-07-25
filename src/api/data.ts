@@ -31,6 +31,7 @@ export interface Chat {
   id: string;
   title: string;
   patient_id: string;
+  conversation_id: string;
   messages: ChatMsg[];
 }
 
@@ -78,8 +79,16 @@ export const updateEntry = (id: string, patch: Partial<Entry>): Promise<void> =>
 
 export const listChats = (): Promise<Chat[]> => base44.entities.Chat.list('-updated_date');
 
-export const createChat = (c: { title: string; patient_id: string; messages: ChatMsg[] }): Promise<Chat> =>
-  base44.entities.Chat.create(c);
+export const createChat = (c: {
+  title: string;
+  patient_id: string;
+  conversation_id: string;
+  messages: ChatMsg[];
+}): Promise<Chat> => base44.entities.Chat.create(c);
 
-export const updateChatMessages = (id: string, messages: ChatMsg[]): Promise<void> =>
-  base44.entities.Chat.update(id, { messages }).then(() => undefined);
+// Persist the running message log (and the resumable agent conversation id) after
+// each exchange — this Chat record is what the MenuDrawer lists as history.
+export const updateChat = (
+  id: string,
+  patch: { messages?: ChatMsg[]; conversation_id?: string }
+): Promise<void> => base44.entities.Chat.update(id, patch).then(() => undefined);

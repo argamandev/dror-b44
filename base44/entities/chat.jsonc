@@ -1,8 +1,9 @@
 {
   "name": "Chat", "type": "object", "title": "שיחה",
   "properties": {
-    "title":      { "type": "string" },
-    "patient_id": { "type": "string", "default": "" },
+    "title":           { "type": "string" },
+    "patient_id":      { "type": "string", "default": "" },
+    "conversation_id": { "type": "string", "default": "" },
     "messages":   { "type": "array", "items": { "type": "object", "properties": {
       "role": { "type": "string", "enum": ["user", "dror"] },
       "text": { "type": "string" },

@@ -1,15 +1,15 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import type { Screen } from '@/state/useAppState';
 
 // Ported verbatim from the design mock (lines 200-218). Visible on every
 // screen except 'draft' (caller decides whether to render it at all).
-// Send behavior is a stub this task (mirrors mock lines 692-696): it just
-// pulses the home orb. Real send wiring arrives in Task 7.
+// Send dispatches to the real Dror agent via `onSend` (state.sendChat); the
+// screen tells us whether this is a home (general) send or a patient send.
 interface ChatBarProps {
   screen: Screen;
   activePatientName: string | null;
   onOpenRecord: () => void;
-  setHomeOrb: (s: 'idle' | 'thinking') => void;
+  onSend: (text: string, fromHome: boolean) => void;
 }
 
 const barStyle: CSSProperties = {
@@ -53,28 +53,21 @@ const sendBtn: CSSProperties = {
   cursor: 'pointer',
 };
 
-export default function ChatBar({ screen, activePatientName, onOpenRecord, setHomeOrb }: ChatBarProps) {
+export default function ChatBar({ screen, activePatientName, onOpenRecord, onSend }: ChatBarProps) {
   const [text, setText] = useState('');
-  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
-  useEffect(() => () => clearTimeout(timerRef.current), []);
 
   const placeholder =
     screen === 'home'
       ? 'תיצור לי מסמך אינטייק על @אלון'
-      : `על מה אני ו${activePatientName ?? ''} דיברנו בפגישה הקודמת?`;
+      : activePatientName
+        ? `על מה אני ו${activePatientName} דיברנו בפגישה הקודמת?`
+        : 'כתוב לדרור…';
 
   const handleSend = () => {
     const trimmed = text.trim();
-    if (screen === 'home' || !trimmed) {
-      setText('');
-      setHomeOrb('thinking');
-      clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => setHomeOrb('idle'), 2600);
-    } else {
-      // Task 7 wires real send here
-      setText('');
-    }
+    if (!trimmed) return;
+    onSend(trimmed, screen === 'home');
+    setText('');
   };
 
   return (
@@ -84,6 +77,12 @@ export default function ChatBar({ screen, activePatientName, onOpenRecord, setHo
         placeholder={placeholder}
         value={text}
         onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            handleSend();
+          }
+        }}
         style={inputStyle}
       />
       <div dir="ltr" style={rowStyle}>

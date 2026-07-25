@@ -5,6 +5,7 @@ import Login from '@/screens/Login';
 import Home from '@/screens/Home';
 import Profile from '@/screens/Profile';
 import World from '@/screens/World';
+import PatientChat from '@/screens/PatientChat';
 import DraftEditor from '@/screens/DraftEditor';
 import SearchOverlay from '@/overlays/SearchOverlay';
 import PatientContextOverlay from '@/overlays/PatientContextOverlay';
@@ -135,6 +136,17 @@ function AuthedApp({ user }: { user: User }) {
             state.go('draft');
           }}
         />
+      ) : state.screen === 'chat' ? (
+        <PatientChat
+          title={
+            state.activeChat.patientId && state.activePatient
+              ? `שיחה על ${fullName(state.activePatient)}`
+              : 'שיחה עם דרור'
+          }
+          messages={state.activeChat.messages}
+          thinking={state.chatThinking}
+          onBack={state.leaveChat}
+        />
       ) : state.screen === 'draft' && state.draft ? (
         <DraftEditor
           draft={state.draft}
@@ -185,17 +197,12 @@ function AuthedApp({ user }: { user: User }) {
           onRefreshChats={state.refreshChats}
           onNewChat={() => {
             state.close();
-            state.go('home');
+            state.newChat();
           }}
           onOpenSearch={() => state.open('search')}
           onOpenChat={(chat) => {
             state.close();
-            // Task 7 opens the conversation
-            if (chat.patient_id) {
-              state.openPatient(chat.patient_id);
-            } else {
-              state.go('home');
-            }
+            state.openChat(chat);
           }}
           onOpenSettings={() => state.open('appSettings')}
         />
@@ -208,7 +215,7 @@ function AuthedApp({ user }: { user: User }) {
           screen={state.screen}
           activePatientName={state.activePatient ? fullName(state.activePatient) : null}
           onOpenRecord={() => state.open('record')}
-          setHomeOrb={state.setHomeOrb}
+          onSend={state.sendChat}
         />
       )}
 
