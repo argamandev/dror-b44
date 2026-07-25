@@ -40,6 +40,11 @@ type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
 // auto-restart exists for) is deliberately NOT in this set.
 const FATAL_RECOGNITION_ERRORS = new Set(['not-allowed', 'service-not-allowed', 'audio-capture']);
 
+// Subset of the fatal errors above that specifically mean "no mic access" —
+// surfaced to the UI via `micError` so a denied/unavailable mic shows a
+// visible notice instead of a fake "listening" state.
+const MIC_ACCESS_RECOGNITION_ERRORS = new Set(['not-allowed', 'service-not-allowed']);
+
 declare global {
   interface Window {
     SpeechRecognition?: SpeechRecognitionCtor;
@@ -55,10 +60,12 @@ export interface SessionRecorder {
   running: boolean;
   transcript: string;
   supported: boolean;
+  micError: boolean;
   start(): Promise<void>;
   pause(): void;
   resume(): void;
   stop(): Promise<{ seconds: number; transcript: string }>;
+  reset(): void;
 }
 
 // Appends a newly-final speech chunk to the accumulated transcript, adding a
@@ -81,6 +88,7 @@ export function useSessionRecorder(): SessionRecorder {
   const [seconds, setSeconds] = useState(0);
   const [running, setRunning] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [micError, setMicError] = useState(false);
 
   const secondsRef = useRef(0);
   const transcriptRef = useRef('');
@@ -130,6 +138,14 @@ export function useSessionRecorder(): SessionRecorder {
       // case onend's auto-restart below exists for — only permission/device
       // errors stop the retry loop, since those won't fix themselves.
       if (FATAL_RECOGNITION_ERRORS.has(ev.error)) fatalErrorRef.current = true;
+      // A mic-access error can arrive asynchronously, after start() already
+      // resolved with running=true — surface it as a visible failure state
+      // instead of leaving a fake "listening" UI ticking away.
+      if (MIC_ACCESS_RECOGNITION_ERRORS.has(ev.error)) {
+        setMicError(true);
+        stopTimer();
+        setRunning(false);
+      }
     };
     rec.onend = () => {
       if (wantRecognitionRef.current && !fatalErrorRef.current) {
@@ -141,7 +157,7 @@ export function useSessionRecorder(): SessionRecorder {
       }
     };
     return rec;
-  }, [setTranscriptBoth]);
+  }, [setTranscriptBoth, stopTimer]);
 
   const stopRecognition = useCallback(() => {
     wantRecognitionRef.current = false;
@@ -157,31 +173,42 @@ export function useSessionRecorder(): SessionRecorder {
     }
   }, []);
 
-  const start = useCallback(async () => {
+  // Clears accumulated transcript/seconds/error state without touching the
+  // mic/recognition lifecycle — used when the consumer switches methods
+  // (e.g. abandons a recording for text entry) so the abandoned side's data
+  // can't resurface later. `start()` also calls this internally on a fresh
+  // attempt.
+  const reset = useCallback(() => {
     secondsRef.current = 0;
     transcriptRef.current = '';
     fatalErrorRef.current = false;
     setSeconds(0);
     setTranscript('');
+    setMicError(false);
+  }, []);
+
+  const start = useCallback(async () => {
+    reset();
 
     try {
       streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch {
-      streamRef.current = null; // mic denied — still let transcription/timer try to run
+      streamRef.current = null;
+      // Mic denied/unavailable — surface it instead of pretending to listen.
+      setMicError(true);
+      return;
     }
 
-    if (streamRef.current) {
-      try {
-        const recorder = new MediaRecorder(streamRef.current);
-        recorder.ondataavailable = () => {
-          /* chunks discarded this week — MediaRecorder is only kept running to
-             keep the mic hot and future-proof audio upload */
-        };
-        recorder.start();
-        recorderRef.current = recorder;
-      } catch {
-        recorderRef.current = null;
-      }
+    try {
+      const recorder = new MediaRecorder(streamRef.current);
+      recorder.ondataavailable = () => {
+        /* chunks discarded this week — MediaRecorder is only kept running to
+           keep the mic hot and future-proof audio upload */
+      };
+      recorder.start();
+      recorderRef.current = recorder;
+    } catch {
+      recorderRef.current = null;
     }
 
     if (supported) {
@@ -197,7 +224,7 @@ export function useSessionRecorder(): SessionRecorder {
 
     startTimer();
     setRunning(true);
-  }, [createRecognition, startTimer, supported]);
+  }, [createRecognition, reset, startTimer, supported]);
 
   const pause = useCallback(() => {
     stopRecognition();
@@ -262,5 +289,5 @@ export function useSessionRecorder(): SessionRecorder {
     };
   }, [stopRecognition, stopTimer]);
 
-  return { seconds, running, transcript, supported, start, pause, resume, stop };
+  return { seconds, running, transcript, supported, micError, start, pause, resume, stop, reset };
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { Patient } from '@/api/data';
 import { fullName, fmtTimer } from '@/api/format';
 import { summarizeSession } from '@/api/ai';
@@ -110,6 +110,13 @@ const timerStyle: CSSProperties = {
   fontVariantNumeric: 'tabular-nums',
 };
 const recTextStyle: CSSProperties = { fontSize: 14.5, color: 'rgba(255,255,255,0.85)' };
+const micErrorTextStyle: CSSProperties = {
+  fontSize: 14.5,
+  color: 'rgba(255,255,255,0.85)',
+  textAlign: 'center',
+  lineHeight: 1.6,
+  padding: '0 8px',
+};
 const recControlsStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 12 };
 const toggleBtnStyle: CSSProperties = {
   width: 52,
@@ -210,10 +217,17 @@ export default function FlowOverlay({ flowType, patient, onClose, onDraftReady, 
   const [guide, setGuide] = useState('');
   const [generating, setGenerating] = useState(false);
 
+  // Tracks whether the overlay has been closed (via the X or by unmounting)
+  // so an in-flight summarizeSession() that resolves afterwards can be
+  // dropped silently instead of navigating/toasting on a screen the user
+  // already left.
+  const closedRef = useRef(false);
+
   // Safety net: release the mic if the overlay unmounts without going
   // through handleClose/handleFinishRecording (e.g. parent swaps overlays).
   useEffect(() => {
     return () => {
+      closedRef.current = true;
       recorder.stop().catch(() => {});
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -223,12 +237,14 @@ export default function FlowOverlay({ flowType, patient, onClose, onDraftReady, 
   const isTextStep2 = step === 2 && method === 'text';
 
   const handlePickRecord = async () => {
+    recorder.reset(); // clear any stale transcript/seconds from a prior aborted attempt
     setMethod('record');
     setStep(2);
     await recorder.start();
   };
 
   const handlePickText = () => {
+    recorder.reset(); // clear any abandoned recording transcript so it can't resurface
     setMethod('text');
     setStep(2);
   };
@@ -255,11 +271,15 @@ export default function FlowOverlay({ flowType, patient, onClose, onDraftReady, 
   };
 
   const handleClose = () => {
+    closedRef.current = true;
     recorder.stop().catch(() => {});
     onClose();
   };
 
-  const source = recorder.transcript.trim() || notes.trim();
+  // Strictly scoped to the active method — an abandoned recording's
+  // transcript (or leftover typed notes from before a method switch) must
+  // never leak in as the source for the other method.
+  const source = method === 'record' ? recorder.transcript.trim() : notes.trim();
   const sourceEmpty = !source;
 
   const handleCreateDraft = async () => {
@@ -267,8 +287,10 @@ export default function FlowOverlay({ flowType, patient, onClose, onDraftReady, 
     setGenerating(true);
     try {
       const result = await summarizeSession({ patientId: patient.id, source, guide: guide.trim() });
+      if (closedRef.current) return; // overlay closed mid-generate — drop the result silently
       onDraftReady(result);
     } catch {
+      if (closedRef.current) return;
       showToast(SUMMARIZE_ERROR);
       setGenerating(false);
     }
@@ -334,25 +356,33 @@ export default function FlowOverlay({ flowType, patient, onClose, onDraftReady, 
 
         {!generating && flowType === 'summary' && isRecordStep2 && (
           <div style={recWrapStyle}>
-            <div dir="ltr" style={timerStyle}>
-              {fmtTimer(recorder.seconds)}
-            </div>
-            <dror-orb size="120" state={recorder.running ? 'listening' : 'idle'} />
-            <div style={recTextStyle}>{recorder.running ? 'דרור מקשיב…' : 'ההקלטה מושהית'}</div>
-            <div style={recControlsStyle}>
-              <div onClick={handleToggleRecording} style={toggleBtnStyle}>
-                {recorder.running ? (
-                  <div style={runningIndicatorStyle} />
-                ) : (
-                  <svg viewBox="0 0 24 24" fill="none" width={19} height={19}>
-                    <path d="M8 5.5v13l11-6.5-11-6.5z" fill="#fff" />
-                  </svg>
-                )}
+            {recorder.micError ? (
+              <div style={micErrorTextStyle}>
+                אין גישה למיקרופון — אפשר לאשר גישה בדפדפן או לחזור ולכתוב נקודות במקום
               </div>
-              <button type="button" onClick={handleFinishRecording} style={finishBtnStyle}>
-                סיום הקלטה
-              </button>
-            </div>
+            ) : (
+              <>
+                <div dir="ltr" style={timerStyle}>
+                  {fmtTimer(recorder.seconds)}
+                </div>
+                <dror-orb size="120" state={recorder.running ? 'listening' : 'idle'} />
+                <div style={recTextStyle}>{recorder.running ? 'דרור מקשיב…' : 'ההקלטה מושהית'}</div>
+                <div style={recControlsStyle}>
+                  <div onClick={handleToggleRecording} style={toggleBtnStyle}>
+                    {recorder.running ? (
+                      <div style={runningIndicatorStyle} />
+                    ) : (
+                      <svg viewBox="0 0 24 24" fill="none" width={19} height={19}>
+                        <path d="M8 5.5v13l11-6.5-11-6.5z" fill="#fff" />
+                      </svg>
+                    )}
+                  </div>
+                  <button type="button" onClick={handleFinishRecording} style={finishBtnStyle}>
+                    סיום הקלטה
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 
