@@ -270,7 +270,18 @@ export default function RecordOverlay({
     closedRef.current = false;
     if (!startedRef.current) {
       startedRef.current = true;
-      recorder.start();
+      // If the overlay is closed (X, or unmount) while getUserMedia's
+      // permission prompt is still pending, handleClose's recorder.stop()
+      // is a no-op (the stream/recorder/recognition refs are still null at
+      // that point) — start() then resolves afterwards on this orphaned
+      // instance and opens a live mic with nothing left to stop it. Checking
+      // closedRef once start() settles closes that window immediately.
+      recorder
+        .start()
+        .then(() => {
+          if (closedRef.current) recorder.stop().catch(() => {});
+        })
+        .catch(() => {});
     }
     return () => {
       closedRef.current = true;

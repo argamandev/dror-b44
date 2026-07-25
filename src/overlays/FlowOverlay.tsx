@@ -318,6 +318,13 @@ export default function FlowOverlay({
     setMethod('record');
     setStep(2);
     await recorder.start();
+    // If the overlay was closed (X, or unmount) while getUserMedia's
+    // permission prompt was still pending, handleClose's recorder.stop() ran
+    // as a no-op (the stream/recorder/recognition refs were still null at
+    // that point) — start() has now resolved on this orphaned instance and
+    // opened a live mic with nothing left to stop it. Checking closedRef once
+    // start() settles closes that window immediately.
+    if (closedRef.current) recorder.stop().catch(() => {});
   };
 
   const handlePickText = () => {
