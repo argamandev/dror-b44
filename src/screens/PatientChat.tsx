@@ -1,5 +1,6 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 import type { ChatMsg } from '@/api/data';
+import { renderAssistantText } from '@/ui/richText';
 
 // Ported verbatim from the design mock (lines 142-171, "PATIENT CHAT"), with the
 // bubble/row styles from the mock's renderVals (lines 677-683). Used for both a
@@ -130,7 +131,7 @@ export default function PatientChat({ title, messages, thinking, onBack }: Patie
           m.role === 'dror' ? (
             <div key={i} style={drorRowStyle}>
               <dror-orb size="26" state="idle" style={orbSlotStyle} />
-              <div style={drorBubbleStyle}>{m.text}</div>
+              <div style={drorBubbleStyle}>{renderAssistantText(m.text)}</div>
             </div>
           ) : (
             <div key={i} style={userRowStyle}>
