@@ -17,3 +17,56 @@ Product/company predate this week (dror-ai.com); this repo and its backend are b
   - Signup = `register()` + OTP `verifyOtp()` before email/password login works.
 - Template observations: JS scaffold (jsx + jsconfig), Tailwind + shadcn-style ui components, example Task entity + task_manager agent (both removed — replaced by Dror's real model).
 - **`is_draft` residual risk (accepted):** the Dror agent's draft-only rule for Entry creation ("is_draft = true תמיד. לעולם אל תיצור רשומה שאינה טיוטה" in `base44/agents/dror.jsonc`) is enforced only by the agent's own instructions — Base44's `tool_configs` grant an entity operation (create) but cannot constrain the *values* written within it, so there is no platform-level guarantee the agent always sets `is_draft: true`. The residual risk is bounded: every Entry the agent creates is still scoped by RLS to the currently-authenticated therapist's own account (per the `tool_configs`/RLS model in `docs/context/base44-facts.md`), so the worst case is a non-draft entry landing in the therapist's own world, not a cross-tenant leak or an unreviewable record. Accepted as-is for the competition build; server-side coercion of `is_draft: true` on agent-originated writes (e.g. a Deno function wrapping the create, or a DB-level check) is listed as roadmap hardening rather than blocking this build.
+
+### Demo seed script + privacy verification
+
+- **`scripts/seed.ts`** (run via `cat scripts/seed.ts | npx base44 exec`, pre-authenticated as
+  the CLI user `sagi.arg@gmail.com` — the founder's own demo account; Deno required, already
+  installed at `C:\Users\Sagi\.deno` from Task 7). Seeds the four demo patients from the design
+  mock (`Dror.dc.html` lines 565-589): איתי (18 sessions), נועה (12), דניאל (7), מיכל (23), where
+  "sessions" = non-draft `summary` Entry count (`sessionCount()` in `src/api/format.ts`).
+  Idempotent and **convergent**: a patient is matched by first name and never re-created (so the
+  leftover Task-7 smoke-test patient "איתי לוי" is reused, not duplicated); entries are topped up
+  weekly-backwards from the mock's anchor date (2026-07-21) to reach each target count, skipping
+  any date already occupied. איתי's three verbatim mock entries (two real summaries + one real
+  doc, mock lines 567-569) are inserted by exact title match if missing. Re-running the script
+  after targets are met creates 0 new records — verified by running it twice.
+
+  **Real output, first run** (created 16+12+7+23 = 58 new entries + 3 new patients):
+  ```
+  Final seed summary (non-draft summary counts = "sessions"):
+  Patient         Target  Existing  Created
+  איתי לוי        18      2         16
+  נועה            12      0         12
+  דניאל           7       0         7
+  מיכל            23      0         23
+  ```
+  **Real output, second run** (idempotence check):
+  ```
+  Final seed summary (non-draft summary counts = "sessions"):
+  Patient         Target  Existing  Created
+  איתי לוי        18      18        0
+  נועה            12      12        0
+  דניאל           7       7         0
+  מיכל            23      23        0
+  ```
+  Post-seed spot check confirmed exact in-app `sessionCount` values: 18/12/7/23.
+
+- **`scripts/verify-rls.ts`** (same `exec` invocation) — the scripted half of the privacy pass:
+  (a) `Patient.list()` from this account returns exactly the 4 seeded patients, nothing more;
+  (b) `Entry.filter({ patient_id: <nonexistent-id> })` returns `[]`;
+  (c) `Patient.get(<fabricated 24-char id>)` **throws** a 404 ("Entity Patient with ID … not
+  found") rather than returning a record — notably indistinguishable from a genuinely-missing id,
+  which is itself a good privacy property (no existence leak via a different error shape);
+  (d) ownership stamping — **finding**: the live Patient API response does **not** populate a
+  `created_by` (email) field at all, only `created_by_id`, despite the SDK docs' `ServerEntityFields`
+  type listing `created_by?: string | null` as a server field. The script falls back to comparing
+  `created_by_id` against the current user's `id` (`base44.auth.me().id`), which matched
+  (`true`) on the seeded מיכל patient.
+
+  **Honest scope note (per controller resolution):** this script proves ownership stamping and
+  RLS-scoped reads for the **current account only**. It cannot prove cross-account isolation (that
+  a *second* therapist's account sees none of this data) — that requires a second live Base44
+  account. **Pending:** the founder (Sagi) will run a manual two-account check from his phone
+  (log in as a second account, confirm the patient list is empty and no seeded data is reachable)
+  to close out that half of the privacy verification.
