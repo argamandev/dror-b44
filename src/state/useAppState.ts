@@ -115,7 +115,7 @@ export function useAppState() {
       const title = asDraft && !draft.title.includes('(טיוטה)') ? `${draft.title} (טיוטה)` : draft.title;
       try {
         if (draft.id) {
-          await updateEntry(draft.id, { body: draft.body, title });
+          await updateEntry(draft.id, { body: draft.body, title, is_draft: asDraft });
         } else {
           await createEntry({
             patient_id: draft.patientId,

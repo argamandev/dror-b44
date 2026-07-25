@@ -154,6 +154,7 @@ function AuthedApp() {
           patients={state.patients}
           onClose={() => state.close()}
           onOpenPatient={async (id) => {
+            await state.refreshPatients();
             await state.openPatient(id);
             state.close();
           }}
