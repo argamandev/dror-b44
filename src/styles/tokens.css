@@ -4,4 +4,5 @@
   --coral:#ee5a50; --peach:rgb(245,150,105); --pink:rgb(242,152,156); --lavender:#d0b1ca;
   --grad-hero:radial-gradient(108% 48% at 50% -4%, rgba(238,90,80,.95) 0%, rgba(245,150,105,.85) 30%, rgba(242,152,156,.75) 55%, rgba(208,177,202,.5) 70%, rgba(208,177,202,0) 82%);
   --font-serif:'Frank Ruhl Libre',serif; --font-sans:Assistant,-apple-system,sans-serif;
+  --top-inset:env(safe-area-inset-top, 0px);
 }
