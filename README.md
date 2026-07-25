@@ -30,9 +30,10 @@ here is a feature, not a footnote.
 
 What was built for the **Base44 Dev Build-Off** is the thing this repository contains: the entire
 backend — data model, access control, the agent, the AI functions, auth, hosting — rebuilt from
-nothing on Base44 during the build week. Git history starts on **2026-07-25**; all 27 commits carry
-that date. Nothing was carried over from the existing product's stack. The pitch is *"a founder
-rebuilds a validated product on Base44 in a week,"* never *"look what I invented this week."*
+nothing on Base44 during the build week. Git history starts on **2026-07-25**; every commit in this
+repository is dated 2026-07-25. Nothing was carried over from the existing product's stack. The
+pitch is *"a founder rebuilds a validated product on Base44 in a week,"* never *"look what I
+invented this week."*
 
 ---
 

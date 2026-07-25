@@ -163,7 +163,17 @@ export function useAppState() {
   const saveDraft = useCallback(
     async (asDraft: boolean) => {
       if (!draft) return;
-      const title = asDraft && !draft.title.includes('(טיוטה)') ? `${draft.title} (טיוטה)` : draft.title;
+      // On save-as-draft, append the ' (טיוטה)' suffix once (idempotent — never
+      // double it). On final save, strip it back off so a finalized entry
+      // doesn't carry the draft marker in its title forever.
+      const DRAFT_SUFFIX = ' (טיוטה)';
+      const title = asDraft
+        ? draft.title.includes('(טיוטה)')
+          ? draft.title
+          : `${draft.title}${DRAFT_SUFFIX}`
+        : draft.title.endsWith(DRAFT_SUFFIX)
+          ? draft.title.slice(0, -DRAFT_SUFFIX.length)
+          : draft.title;
       try {
         if (draft.id) {
           await updateEntry(draft.id, { body: draft.body, title, is_draft: asDraft });

@@ -71,8 +71,9 @@ const placeholderBtnStyle: CSSProperties = {
   cursor: 'pointer',
 };
 
-// Screens not yet built (Task 5 replaces this with the real markup) — keeps
-// the state machine's navigation targets real without dead code paths.
+// Fallback for an unreachable combination of screen/state (e.g. 'profile' or
+// 'world' without an activePatient) — every real screen is built; this just
+// keeps the state machine's navigation targets total without dead code paths.
 function ScreenPlaceholder({ onHome }: { onHome: () => void }) {
   return (
     <div style={placeholderWrapStyle}>

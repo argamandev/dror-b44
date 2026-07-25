@@ -71,15 +71,19 @@ export const createPatient = (first: string, last: string): Promise<Patient> =>
 export const updatePatientNotes = (id: string, notes: string): Promise<void> =>
   base44.entities.Patient.update(id, { context_notes: notes }).then(() => undefined);
 
+// Sort and limit are passed explicitly (rather than relying on the SDK's
+// filter() defaults of '-created_date' and limit 50) so a patient's world,
+// session count, and doc-flow numbering never silently truncate past 50
+// entries — see README's "session numbering" note for the same fix upstream.
 export const listEntries = (patientId: string): Promise<Entry[]> =>
-  base44.entities.Entry.filter({ patient_id: patientId }, '-entry_date');
+  base44.entities.Entry.filter({ patient_id: patientId }, '-entry_date', 5000);
 
 export const createEntry = (e: Omit<Entry, 'id'>): Promise<Entry> => base44.entities.Entry.create(e);
 
 export const updateEntry = (id: string, patch: Partial<Entry>): Promise<void> =>
   base44.entities.Entry.update(id, patch).then(() => undefined);
 
-export const listChats = (): Promise<Chat[]> => base44.entities.Chat.list('-updated_date');
+export const listChats = (): Promise<Chat[]> => base44.entities.Chat.list('-updated_date', 5000);
 
 export const createChat = (c: {
   title: string;

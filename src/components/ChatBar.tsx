@@ -97,7 +97,7 @@ export default function ChatBar({ screen, activePatientName, onOpenRecord, onSen
       />
       <div dir="ltr" style={rowStyle}>
         <div style={leftIconsStyle}>
-          <div title="הוספה" style={iconBtn}>
+          <div onClick={onOpenRecord} title="הוספה" style={iconBtn}>
             <svg viewBox="0 0 24 24" fill="none" width={24} height={24}>
               <path d="M12 5v14M5 12h14" stroke="#17171b" strokeWidth={2} strokeLinecap="round" />
             </svg>
