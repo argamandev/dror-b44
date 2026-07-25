@@ -1,0 +1,17 @@
+export function fmtDate(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}`;
+}
+
+export function fmtTimer(sec: number): string {
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+export function fullName(p: { first_name: string; last_name?: string }): string {
+  return [p.first_name, p.last_name].filter(Boolean).join(' ');
+}
+
+export function sessionCount(entries: { type: string; is_draft?: boolean }[]): number {
+  return entries.filter(e => e.type === 'summary' && !e.is_draft).length;
+}
