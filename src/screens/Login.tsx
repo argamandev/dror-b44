@@ -253,7 +253,7 @@ export default function Login({ onAuthed }: { onAuthed: () => void }) {
       )}
 
       {error && (
-        <div style={{ marginTop: 16, fontSize: 13.5, color: 'var(--coral)', textAlign: 'center' }}>
+        <div style={{ marginTop: 16, fontSize: 13.5, color: 'var(--accent)', textAlign: 'center' }}>
           {error}
         </div>
       )}

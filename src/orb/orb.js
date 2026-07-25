@@ -67,28 +67,33 @@ void main(){
   float wob = (fbm(p*1.3 + vec2(t*0.26, -t*0.21)) - 0.5) * 1.5;
   theta2 += wob * 0.55;
 
-  float dC = (0.34*sin(TAU*t/7.3)       + 0.22*sin(TAU*t/3.1 + 2.0)) * B;
-  float dP = (0.34*sin(TAU*t/9.1 + 2.1) + 0.22*sin(TAU*t/4.3 + 0.7)) * B;
-  float dL = (0.34*sin(TAU*t/11.7+ 4.2) + 0.22*sin(TAU*t/3.7 + 1.9)) * B;
-  float dK = (0.34*sin(TAU*t/8.1 + 1.3) + 0.22*sin(TAU*t/5.1 + 3.8)) * B;
+  float d1 = (0.34*sin(TAU*t/7.3)       + 0.22*sin(TAU*t/3.1 + 2.0)) * B;
+  float d2 = (0.34*sin(TAU*t/9.1 + 2.1) + 0.22*sin(TAU*t/4.3 + 0.7)) * B;
+  float d3 = (0.34*sin(TAU*t/11.7+ 4.2) + 0.22*sin(TAU*t/3.7 + 1.9)) * B;
+  float d4 = (0.34*sin(TAU*t/8.1 + 1.3) + 0.22*sin(TAU*t/5.1 + 3.8)) * B;
+  float d5 = (0.34*sin(TAU*t/10.3+ 5.0) + 0.22*sin(TAU*t/4.7 + 0.3)) * B;
 
-  float bC = 1.8 * (1.0 + 0.16*sin(TAU*t/6.7 + 0.5));
-  float bP = 1.8 * (1.0 + 0.16*sin(TAU*t/8.3 + 2.2));
-  float bL = 2.5 * (1.0 + 0.14*sin(TAU*t/10.1+ 4.0));
-  float bK = 1.6 * (1.0 + 0.16*sin(TAU*t/7.7 + 1.0));
+  float b1 = 1.45 * (1.0 + 0.16*sin(TAU*t/6.7 + 0.5));
+  float b2 = 1.45 * (1.0 + 0.16*sin(TAU*t/8.3 + 2.2));
+  float b3 = 1.45 * (1.0 + 0.14*sin(TAU*t/10.1+ 4.0));
+  float b4 = 2.00 * (1.0 + 0.16*sin(TAU*t/7.7 + 1.0));
+  float b5 = 1.30 * (1.0 + 0.16*sin(TAU*t/9.3 + 3.1));
 
-  vec3 cCoral = vec3(0.933, 0.353, 0.314);
-  vec3 cPeach = vec3(0.961, 0.588, 0.420);
-  vec3 cLav   = vec3(0.816, 0.694, 0.792);
-  vec3 cPink  = vec3(0.949, 0.596, 0.612);
-  float wC = sectorW(theta2 - dC, -135.0, bC);
-  float wP = sectorW(theta2 - dP,  -45.0, bP);
-  float wL = sectorW(theta2 - dL,   55.0, bL);
-  float wK = sectorW(theta2 - dK,  150.0, bK);
-  float s = wC + wP + wL + wK + 1e-6;
-  vec3 col = (cCoral*wC + cPeach*wP + cLav*wL + cPink*wK) / s;
+  /* Dawn Break — sky blues into warm cloud light */
+  vec3 c1 = vec3(0.420, 0.443, 0.965);  /* #6B71F6 */
+  vec3 c2 = vec3(0.663, 0.725, 0.976);  /* #A9B9F9 */
+  vec3 c3 = vec3(0.941, 0.894, 0.910);  /* #F0E4E8 */
+  vec3 c4 = vec3(0.965, 0.851, 0.769);  /* #F6D9C4 */
+  vec3 c5 = vec3(0.984, 0.965, 0.937);  /* #FBF6EF */
+  float w1 = sectorW(theta2 - d1, -144.0, b1);
+  float w2 = sectorW(theta2 - d2,  -72.0, b2);
+  float w3 = sectorW(theta2 - d3,    0.0, b3);
+  float w4 = sectorW(theta2 - d4,   72.0, b4);
+  float w5 = sectorW(theta2 - d5,  144.0, b5);
+  float s = w1 + w2 + w3 + w4 + w5 + 1e-6;
+  vec3 col = (c1*w1 + c2*w2 + c3*w3 + c4*w4 + c5*w5) / s;
 
-  vec3 avg = (cCoral + cPeach + cLav + cPink) * 0.25;
+  vec3 avg = (c1 + c2 + c3 + c4 + c5) * 0.2;
   float fade = smoothstep(0.0, 0.35, r);
   col = mix(avg, col, fade);
 
@@ -121,6 +126,15 @@ const STATES = {
   listening: { mood: 0.80, talk: 0.55 },
   thinking:  { mood: 0.55, talk: 1.0 }
 };
+
+let _fallbackKeyframesInjected = false;
+function injectFallbackKeyframes(){
+  if (_fallbackKeyframesInjected) return;
+  _fallbackKeyframesInjected = true;
+  const style = document.createElement('style');
+  style.textContent = '@keyframes drorOrbFallback { from { filter: hue-rotate(0deg) saturate(1); transform: scale(0.97); } to { filter: hue-rotate(12deg) saturate(1.12); transform: scale(1.03); } }';
+  document.head.appendChild(style);
+}
 
 class DrorOrb extends HTMLElement {
   static get observedAttributes(){ return ['state','size']; }
@@ -166,8 +180,13 @@ class DrorOrb extends HTMLElement {
   _initGL(){
     const gl = this._canvas.getContext('webgl', {antialias:true, alpha:true, premultipliedAlpha:false});
     if (!gl){
-      this._canvas.style.background = 'radial-gradient(circle at 40% 35%, #fdf1ec 0%, #f2989c 35%, #ee5a50 60%, #d0b1ca 100%)';
+      this._canvas.style.background = 'radial-gradient(circle at 40% 35%, #FBF6EF 0%, #F6D9C4 30%, #A9B9F9 60%, #6B71F6 100%)';
       this._canvas.style.borderRadius = '50%';
+      // Animated no-WebGL fallback — keeps the "always breathing" product
+      // decision (below) true even without a GPU: a slow hue/scale drift
+      // instead of a static gradient.
+      injectFallbackKeyframes();
+      this._canvas.style.animation = 'drorOrbFallback 9s ease-in-out infinite alternate';
       return;
     }
     this._gl = gl;
@@ -199,7 +218,9 @@ class DrorOrb extends HTMLElement {
       v *= 0.35 + 0.65*Math.pow(phrase, 1.5);
       return Math.min(Math.max(v, 0), 1);
     };
-    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // Product decision: the orb is Dror's presence and always breathes — no
+    // prefers-reduced-motion freeze. uTime and uVoice always get the live
+    // signal, in the app as well as everywhere else.
     const start = performance.now() - Math.random()*40000; // desync multiple orbs
     const frame = now => {
       if (!this.isConnected){ this._canvas = null; return; }
@@ -207,10 +228,10 @@ class DrorOrb extends HTMLElement {
       this._mood += (this._target.mood - this._mood) * 0.03;
       this._talk += (this._target.talk - this._talk) * 0.06;
       gl.uniform2f(uRes, this._canvas.width, this._canvas.height);
-      gl.uniform1f(uTime, reduced ? 20.0 : t);
+      gl.uniform1f(uTime, t);
       gl.uniform1f(uMood, this._mood);
       gl.uniform1f(uTalk, this._talk);
-      gl.uniform1f(uVoice, reduced ? 0.5 : voiceEnvelope(t));
+      gl.uniform1f(uVoice, voiceEnvelope(t));
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       requestAnimationFrame(frame);

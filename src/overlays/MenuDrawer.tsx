@@ -131,7 +131,7 @@ const avatarStyle: CSSProperties = {
   width: 36,
   height: 36,
   borderRadius: '50%',
-  background: 'linear-gradient(135deg,#ee5a50,#d0b1ca)',
+  background: 'linear-gradient(135deg,#6B71F6,#A9B9F9)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',

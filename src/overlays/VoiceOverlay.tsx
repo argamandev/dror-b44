@@ -1,12 +1,14 @@
 import type { CSSProperties } from 'react';
 import { useVoiceChat } from '@/hooks/useVoiceChat';
 
-// Ported verbatim from the design mock (lines 280-297 for the layout, 713-723
-// for the state semantics). The mock's voicePhase toggle (listening/speaking
-// on a 5s timer) is replaced by the real speech-to-speech loop in
-// useVoiceChat; the extra "live" line under the caption (last heard user
-// text) is new this task — not in the mock — added per controller resolution
-// 4 to help demo credibility.
+// Ported from the design mock (lines 280-297 for the layout, 713-723 for the
+// state semantics), updated for the Dawn Break v2 mock which drops the
+// "תדבר עם דרור על הכל." title and rotating caption entirely — pure orb
+// presence. The mock's voicePhase toggle (listening/speaking on a 5s timer)
+// is replaced by the real speech-to-speech loop in useVoiceChat; the extra
+// "live" line under the (now title-less) text block (last heard user text)
+// is new this task — not in the mock — added per controller resolution 4 to
+// help demo credibility.
 interface VoiceOverlayProps {
   /**
    * Patient this conversation is scoped to; omit for a general conversation.
@@ -28,7 +30,7 @@ const backdropStyle: CSSProperties = {
   inset: 0,
   zIndex: 20,
   background:
-    'radial-gradient(130% 90% at 50% 110%, rgba(238,90,80,0.35) 0%, rgba(23,23,27,0.92) 55%, rgba(10,10,12,0.96) 100%), rgba(12,12,14,0.9)',
+    'radial-gradient(115% 62% at 50% 106%, rgba(107,113,246,0.6) 0%, rgba(107,113,246,0.34) 26%, rgba(169,185,249,0.14) 44%, rgba(23,23,27,0.92) 68%, rgba(10,10,12,0.97) 100%), rgba(12,12,14,0.9)',
   backdropFilter: 'blur(14px)',
   WebkitBackdropFilter: 'blur(14px)',
   animation: 'drFade 0.45s ease',
@@ -67,12 +69,11 @@ const haloStyle: CSSProperties = {
   position: 'absolute',
   inset: -46,
   borderRadius: '50%',
-  background: 'radial-gradient(circle, rgba(238,90,80,0.35) 0%, rgba(238,90,80,0) 70%)',
+  background: 'radial-gradient(circle, rgba(107,113,246,0.35) 0%, rgba(107,113,246,0) 70%)',
   animation: 'drBreathe 4.5s ease-in-out infinite',
 };
 
 const textWrapStyle: CSSProperties = { textAlign: 'center' };
-const titleStyle: CSSProperties = { fontFamily: 'Calibri,Assistant,sans-serif', fontSize: 23, color: '#ffffff' };
 const captionStyle: CSSProperties = {
   fontSize: 14,
   color: 'rgba(255,255,255,0.55)',
@@ -106,7 +107,10 @@ export default function VoiceOverlay({ patientId, onClose }: VoiceOverlayProps) 
   // speaking share the "thinking" visual (controller resolution 4).
   const orbState = voice.phase === 'listening' ? 'listening' : 'thinking';
 
-  const caption = !voice.supported ? UNSUPPORTED_CAPTION : voice.micError ? MIC_ERROR_CAPTION : voice.caption;
+  // v2 mock drops the title + rotating caption entirely — pure orb presence.
+  // Only functional notices survive: unsupported-browser / mic-permission
+  // text, and (controller resolution 4) the last-heard-user-text line.
+  const notice = !voice.supported ? UNSUPPORTED_CAPTION : voice.micError ? MIC_ERROR_CAPTION : null;
   const showLive = voice.supported && !voice.micError && voice.lastUserText.trim().length > 0;
 
   return (
@@ -122,8 +126,7 @@ export default function VoiceOverlay({ patientId, onClose }: VoiceOverlayProps) 
           <dror-orb size="210" state={orbState} />
         </div>
         <div style={textWrapStyle}>
-          <div style={titleStyle}>תדבר עם דרור על הכל.</div>
-          <div style={captionStyle}>{caption}</div>
+          {notice && <div style={captionStyle}>{notice}</div>}
           {showLive && (
             <div dir="rtl" style={liveTextStyle}>
               {voice.lastUserText}

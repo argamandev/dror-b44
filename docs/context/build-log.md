@@ -79,6 +79,11 @@ Product/company predate this week (dror-ai.com); this repo and its backend are b
   account. **Pending:** the founder (Sagi) will run a manual two-account check from his phone
   (log in as a second account, confirm the patient list is empty and no seeded data is reachable)
   to close out that half of the privacy verification.
+  - **Closed out, same day.** Sagi ran that manual check on 2026-07-25 by logging into the live
+    app with a second Google account: the patient list came back empty and none of the four seeded
+    patients (or their entries) were reachable from it. Cross-account isolation is now verified in
+    addition to the scripted single-account evidence above — updated in `README.md`'s privacy
+    posture accordingly.
 
 ### Wrap-up: README, polish sweep, deploy
 

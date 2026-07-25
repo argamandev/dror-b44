@@ -195,11 +195,13 @@ id — are reported in the build log as *not-found handling, not access control*
 identically with RLS switched off entirely, so they prove nothing about scoping and are not counted
 as evidence here.
 
-**Still open.** That script runs as one account, so it demonstrates scoped reads and ownership
-stamping for that account. It cannot prove cross-account isolation — that a *second* therapist sees
-none of this data — because that needs a second live Base44 account. A manual two-account check by
-the founder is **pending** and is written up as pending in `docs/context/build-log.md` rather than
-quietly omitted.
+**Cross-account isolation — confirmed by hand.** That script runs as one account, so on its own it
+only demonstrates scoped reads and ownership stamping for that account — it cannot prove cross-account
+isolation, that a *second* therapist sees none of this data, because that needs a second live Base44
+account. On 2026-07-25 the founder (Sagi) closed that gap manually: logging into the live app with a
+second Google account, the patient list came back **empty** and none of the seeded data was reachable.
+Per-therapist scoping now has evidence at both ends — the scripted check within one account, and this
+manual check across two. Written up in full in `docs/context/build-log.md`.
 
 **Instruction-enforced, not platform-enforced.** The agent's draft-only rule. Base44's `tool_configs`
 can grant or deny the *create* operation, but cannot constrain the *values* written inside it — so

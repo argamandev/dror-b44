@@ -53,7 +53,12 @@ export function useAppState() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [chats, setChats] = useState<Chat[]>([]);
-  const [draft, setDraft] = useState<Draft | null>(null);
+  const [draft, setDraftState] = useState<Draft | null>(null);
+  // Where the open draft was opened FROM — World's entry list vs. Profile's
+  // "יצירת..." flow buttons / the record flow — so DraftEditor's close button
+  // can return the therapist to the right place instead of always landing on
+  // Profile (mock's draftFrom, v2 diff).
+  const [draftFrom, setDraftFrom] = useState<'profile' | 'world'>('profile');
   const [flowType, setFlowType] = useState<Draft['type']>('summary');
   const [toast, setToast] = useState<string | null>(null);
   const [homeOrb, setHomeOrb] = useState<'idle' | 'thinking'>('idle');
@@ -136,6 +141,28 @@ export function useAppState() {
   const go = useCallback((s: Screen) => setScreen(s), []);
   const open = useCallback((o: Overlay) => setOverlay(o), []);
   const close = useCallback(() => setOverlay(null), []);
+
+  // Sets the open draft. A functional updater (DraftEditor's onBodyChange, on
+  // every keystroke) only edits the draft in place and never touches
+  // draftFrom. Assigning a new draft object (or clearing to null) records
+  // where it came from — `from` defaults to 'profile' (flow overlay / record
+  // flow draft creations); World's entry-open is the one caller that passes
+  // 'world' explicitly.
+  const setDraft = useCallback((d: Draft | null | ((prev: Draft | null) => Draft | null), from?: 'profile' | 'world') => {
+    if (typeof d === 'function') {
+      setDraftState(d);
+      return;
+    }
+    setDraftState(d);
+    if (d !== null) setDraftFrom(from ?? 'profile');
+  }, []);
+
+  // DraftEditor's close (X / back-chevron) button: return to World if the
+  // draft was opened from there, otherwise Profile (mock's closeDraft, v2 diff).
+  const closeDraft = useCallback(() => {
+    setScreen(draftFrom === 'world' ? 'world' : 'profile');
+    setDraftState(null);
+  }, [draftFrom]);
 
   // Profile's two "יצירת..." buttons both open the flow overlay, differing
   // only in which path it starts on (mock's startFlow, line 669).
@@ -372,6 +399,7 @@ export function useAppState() {
     entries,
     chats,
     draft,
+    draftFrom,
     flowType,
     toast,
     activePatient,
@@ -389,6 +417,7 @@ export function useAppState() {
     refreshEntries,
     refreshChats,
     setDraft,
+    closeDraft,
     showToast,
     saveDraft,
     sendChat,

@@ -2,9 +2,13 @@ import type { CSSProperties } from 'react';
 import type { Draft } from '@/state/useAppState';
 import { fmtDate } from '@/api/format';
 
-// Ported verbatim from the design mock (lines 173-193).
+// Ported from the design mock (lines 173-193), plus the v2 diff's dawn hero
+// recolor and context-aware close button: a chevron when the draft was
+// opened from World (closing returns there), an X otherwise (returns to
+// Profile) — mirrors the mock's draftFromWorld/draftFromProfile split.
 interface DraftEditorProps {
   draft: Draft;
+  draftFrom: 'profile' | 'world';
   onBodyChange: (body: string) => void;
   onClose: () => void;
   onSave: (asDraft: boolean) => void;
@@ -26,7 +30,7 @@ const heroStyle: CSSProperties = {
   height: 150,
   opacity: 0.45,
   background:
-    'radial-gradient(120% 120% at 50% -55%, rgba(238,90,80,0.9) 0%, rgba(245,150,105,0.75) 40%, rgba(242,152,156,0.5) 65%, rgba(208,177,202,0) 100%)',
+    'radial-gradient(120% 120% at 50% -55%, rgba(107,113,246,0.9) 0%, rgba(169,185,249,0.75) 40%, rgba(240,228,232,0.5) 65%, rgba(246,217,196,0) 100%)',
 };
 
 const closeBtnStyle: CSSProperties = {
@@ -135,14 +139,20 @@ const footnoteStyle: CSSProperties = {
   color: '#b6b8bd',
 };
 
-export default function DraftEditor({ draft, onBodyChange, onClose, onSave }: DraftEditorProps) {
+export default function DraftEditor({ draft, draftFrom, onBodyChange, onClose, onSave }: DraftEditorProps) {
   return (
     <div style={wrapStyle}>
       <div style={heroStyle} />
-      <div onClick={onClose} style={closeBtnStyle}>
-        <svg viewBox="0 0 24 24" fill="none" width={18} height={18}>
-          <path d="M6 6l12 12M18 6L6 18" stroke="#17171b" strokeWidth={2} strokeLinecap="round" />
-        </svg>
+      <div onClick={onClose} title="חזרה" style={closeBtnStyle}>
+        {draftFrom === 'world' ? (
+          <svg viewBox="0 0 24 24" fill="none" width={20} height={20}>
+            <path d="M9 6l6 6-6 6" stroke="#17171b" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" fill="none" width={18} height={18}>
+            <path d="M6 6l12 12M18 6L6 18" stroke="#17171b" strokeWidth={2} strokeLinecap="round" />
+          </svg>
+        )}
       </div>
       <div style={titleWrapStyle}>
         <div style={titleStyle}>{draft.title}</div>

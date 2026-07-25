@@ -14,7 +14,7 @@ body{
 }
 
 a{color:var(--ink);text-decoration:none}
-a:hover{color:var(--coral)}
+a:hover{color:var(--accent)}
 
 input::placeholder,textarea::placeholder{color:var(--faint)}
 input,textarea,button{font-family:var(--font-sans)}

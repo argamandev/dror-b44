@@ -18,11 +18,10 @@ const glowStyle: CSSProperties = {
   top: 0,
   left: 0,
   right: 0,
-  height: 140,
+  height: 210,
   zIndex: 1,
-  opacity: 0.5,
   background:
-    'radial-gradient(120% 130% at 50% -55%, rgba(238,90,80,0.9) 0%, rgba(245,150,105,0.75) 40%, rgba(242,152,156,0.5) 65%, rgba(208,177,202,0) 100%)',
+    'radial-gradient(130% 120% at 50% -50%, rgba(107,113,246,0.5) 0%, rgba(169,185,249,0.42) 38%, rgba(240,228,232,0.3) 62%, rgba(246,217,196,0.16) 80%, rgba(246,217,196,0) 100%)',
 };
 
 const topRowStyle: CSSProperties = {

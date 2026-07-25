@@ -116,14 +116,17 @@ function AuthedApp({ user }: { user: User }) {
           entries={state.entries}
           onGoProfile={() => state.go('profile')}
           onOpenEntry={(entry) => {
-            state.setDraft({
-              id: entry.id,
-              type: entry.type === 'doc' ? 'doc' : 'summary',
-              patientId: state.activePatient!.id,
-              date: entry.entry_date,
-              title: entry.title,
-              body: entry.type === 'rec' ? entry.transcript || entry.body : entry.body,
-            });
+            state.setDraft(
+              {
+                id: entry.id,
+                type: entry.type === 'doc' ? 'doc' : 'summary',
+                patientId: state.activePatient!.id,
+                date: entry.entry_date,
+                title: entry.title,
+                body: entry.type === 'rec' ? entry.transcript || entry.body : entry.body,
+              },
+              'world'
+            );
             state.go('draft');
           }}
         />
@@ -141,11 +144,9 @@ function AuthedApp({ user }: { user: User }) {
       ) : state.screen === 'draft' && state.draft ? (
         <DraftEditor
           draft={state.draft}
+          draftFrom={state.draftFrom}
           onBodyChange={(body) => state.setDraft((d) => (d ? { ...d, body } : d))}
-          onClose={() => {
-            state.go('profile');
-            state.setDraft(null);
-          }}
+          onClose={() => state.closeDraft()}
           onSave={(asDraft) => state.saveDraft(asDraft)}
         />
       ) : (

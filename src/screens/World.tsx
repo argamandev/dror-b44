@@ -22,7 +22,7 @@ const heroStyle: CSSProperties = {
   zIndex: 0,
   opacity: 0.35,
   background:
-    'radial-gradient(108% 48% at 50% -4%, rgba(238,90,80,0.95) 0%, rgba(245,150,105,0.85) 30%, rgba(242,152,156,0.75) 55%, rgba(208,177,202,0.5) 70%, rgba(208,177,202,0) 82%), #faf8fa',
+    'radial-gradient(108% 48% at 50% -4%, rgba(107,113,246,0.95) 0%, rgba(169,185,249,0.85) 30%, rgba(240,228,232,0.75) 55%, rgba(246,217,196,0.5) 70%, rgba(246,217,196,0) 82%), #faf8fa',
 };
 
 const topRowStyle: CSSProperties = {
