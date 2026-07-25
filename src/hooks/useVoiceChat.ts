@@ -135,6 +135,8 @@ export function useVoiceChat({ patientId }: UseVoiceChatArgs): UseVoiceChat {
         else interimChunk += text;
       }
       if (finalChunk) {
+        // Double-final defense: one utterance should only ever start one turn.
+        if (finalized) return;
         finalized = true;
         setLastUserText(finalChunk);
         void handleTurn(finalChunk);

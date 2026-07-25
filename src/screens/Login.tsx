@@ -190,7 +190,9 @@ export default function Login({ onAuthed }: { onAuthed: () => void }) {
           </div>
           <input
             dir="rtl"
+            name="otp"
             inputMode="numeric"
+            autoComplete="one-time-code"
             placeholder="קוד אימות"
             value={otp}
             onChange={(e) => setOtp(e.target.value)}
@@ -208,7 +210,9 @@ export default function Login({ onAuthed }: { onAuthed: () => void }) {
         >
           <input
             dir="rtl"
+            name="email"
             type="email"
+            autoComplete="email"
             placeholder="אימייל"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -217,7 +221,11 @@ export default function Login({ onAuthed }: { onAuthed: () => void }) {
           />
           <input
             dir="rtl"
+            name="password"
             type="password"
+            // Tells the password manager which of the two it is looking at, so a
+            // login offers the saved password and a signup offers to save a new one.
+            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
             placeholder="סיסמה"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

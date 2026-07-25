@@ -79,3 +79,33 @@ Product/company predate this week (dror-ai.com); this repo and its backend are b
   account. **Pending:** the founder (Sagi) will run a manual two-account check from his phone
   (log in as a second account, confirm the patient list is empty and no seeded data is reachable)
   to close out that half of the privacy verification.
+
+### Wrap-up: README, polish sweep, deploy
+
+- **`README.md`** written (replacing the template's "Todo App" scaffold) as the competition's
+  documentation artifact: the honest framing (product/company predate the week, backend rebuilt
+  from zero on Base44 — git history starts 2026-07-25 and all 27 commits carry that date), the
+  feature walk in demo order, the Base44 backend depth with file paths (3 RLS'd entities, the
+  `dror` agent's asymmetric `tool_configs` and conversation transport, the 3 Deno functions with
+  `InvokeLLM` + `response_json_schema` and their explicit sort/limit hygiene, OTP + Google auth,
+  secrets-based TTS), an ASCII architecture diagram of the single-data-layer pattern
+  (`src/api/` is the only directory importing the SDK — verified by grep), the privacy posture,
+  local-run instructions, and the roadmap.
+  The privacy section carries the honest distinctions verbatim from this log rather than rounding
+  them up: platform-enforced RLS vs. instruction-enforced draft-only rule; checks (b)/(c) named as
+  not-found handling rather than access-control evidence; the two-account cross-isolation check
+  named as pending; the Web Speech API's third-party audio hop disclosed with the roadmap item that
+  closes it; `ELEVENLABS_API_KEY` still unset, so the live demo speaks with the browser voice.
+  `base44 exec` is documented in its real stdin-only form (`cat scripts/seed.ts | npx base44 exec`).
+- **Polish sweep** from accumulated review minors:
+  - `src/screens/Login.tsx` — `name` + `autoComplete` on every input (`email`,
+    `current-password`/`new-password` by mode, `one-time-code` on the OTP field).
+  - `src/hooks/useVoiceChat.ts` — `if (finalized) return;` guard on the final-chunk branch of
+    `onresult`, so one utterance can never start two turns.
+  - `src/state/useAppState.ts` — `sendChat`'s failure path no longer navigates to the chat screen
+    when the failed message was the FIRST one sent from Home: it stays on Home, drops the
+    half-started chat and reports via toast alone, instead of dropping the therapist into a dead
+    thread holding only their own line. Failures inside an already-open thread still land on the
+    chat screen with the message visible.
+- **Gate:** `npm test` 13/13, `npx tsc --noEmit` clean, `npm run build` clean.
+- **Deployed** with `npx base44 deploy --yes` → **https://dror-b44-6f3cb1e4.base44.app**

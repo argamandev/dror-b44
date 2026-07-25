@@ -253,7 +253,16 @@ export function useAppState() {
       } catch {
         setHomeOrb('idle');
         setChatThinkingBoth(false);
-        setScreen('chat'); // keep the user's message visible even on failure
+        if (fromHome && !continuing) {
+          // A FIRST message sent from Home that never got an answer has no
+          // conversation behind it — opening the chat screen would drop the
+          // therapist into a dead thread holding only their own line. Stay on
+          // Home with the orb back at idle and discard the half-started chat;
+          // the toast is the whole error report.
+          setActiveChatBoth(EMPTY_CHAT);
+        } else {
+          setScreen('chat'); // keep the user's message visible in the open thread
+        }
         showToast(ASK_ERROR);
         return;
       }
