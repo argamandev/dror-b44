@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fmtDate, fmtTimer, fullName, sessionCount } from './format';
+import { chipLabel, fmtDate, fmtTimer, fullName, sessionCount } from './format';
 
 describe('format helpers', () => {
   it('formats ISO date as d.m.yyyy', () => {
@@ -22,5 +22,10 @@ describe('format helpers', () => {
       { type: 'summary' }, { type: 'summary', is_draft: true },
       { type: 'doc' }, { type: 'rec' },
     ])).toBe(1);
+  });
+  it('labels entry chips', () => {
+    expect(chipLabel('summary')).toBe('סיכום פגישה');
+    expect(chipLabel('doc')).toBe('מסמך רשמי');
+    expect(chipLabel('rec')).toBe('הקלטה');
   });
 });

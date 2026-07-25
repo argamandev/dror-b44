@@ -23,3 +23,7 @@ export function fullName(p: { first_name: string; last_name?: string }): string 
 export function sessionCount(entries: { type: string; is_draft?: boolean }[]): number {
   return entries.filter(e => e.type === 'summary' && !e.is_draft).length;
 }
+
+export function chipLabel(t: string): string {
+  return t === 'doc' ? 'מסמך רשמי' : t === 'rec' ? 'הקלטה' : 'סיכום פגישה';
+}
