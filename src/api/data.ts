@@ -46,6 +46,8 @@ export const auth = {
   login: (email: string, password: string): Promise<void> =>
     base44.auth.loginViaEmailPassword(email, password).then(() => undefined),
 
+  loginWithGoogle: (): void => base44.auth.loginWithProvider('google'),
+
   register: (email: string, password: string): Promise<void> =>
     base44.auth.register({ email, password }).then(() => undefined),
 
