@@ -127,6 +127,41 @@ function waitForReply(conversationId: string, priorAssistantCount: number): Prom
   });
 }
 
+// Transport to the `summarize` Deno function (base44/functions/summarize/entry.ts).
+// Unlike the agent chat above, this is a plain request/response backend
+// function — no conversation, no streaming. `invoke()` returns the raw axios
+// response (payload on `.data`) and throws on any non-2xx status; we wrap
+// both the thrown error and a malformed success body into a single Error so
+// the FlowOverlay's catch path (toast + back to S3) has one shape to handle.
+export interface SummarizeSessionArgs {
+  patientId: string;
+  /** Live transcript or typed notes from the session. */
+  source: string;
+  /** Optional therapist guidance for this specific draft. */
+  guide: string;
+}
+
+export interface SummarizeSessionResult {
+  title: string;
+  body: string;
+}
+
+export async function summarizeSession(args: SummarizeSessionArgs): Promise<SummarizeSessionResult> {
+  const { patientId, source, guide } = args;
+  let data: unknown;
+  try {
+    const res = await base44.functions.invoke('summarize', { patient_id: patientId, source, guide });
+    data = res.data;
+  } catch {
+    throw new Error('SUMMARIZE_FAILED');
+  }
+  const result = data as Partial<SummarizeSessionResult> | undefined;
+  if (!result || typeof result.title !== 'string' || typeof result.body !== 'string') {
+    throw new Error('SUMMARIZE_FAILED');
+  }
+  return { title: result.title, body: result.body };
+}
+
 export async function askDror(args: AskDrorArgs): Promise<AskDrorResult> {
   const { message, patientId, patientName, conversationId } = args;
 

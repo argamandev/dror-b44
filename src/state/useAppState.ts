@@ -54,6 +54,7 @@ export function useAppState() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [chats, setChats] = useState<Chat[]>([]);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [flowType, setFlowType] = useState<Draft['type']>('summary');
   const [toast, setToast] = useState<string | null>(null);
   const [homeOrb, setHomeOrb] = useState<'idle' | 'thinking'>('idle');
   const [activeChat, setActiveChat] = useState<ActiveChat>(EMPTY_CHAT);
@@ -135,6 +136,16 @@ export function useAppState() {
   const go = useCallback((s: Screen) => setScreen(s), []);
   const open = useCallback((o: Overlay) => setOverlay(o), []);
   const close = useCallback(() => setOverlay(null), []);
+
+  // Profile's two "יצירת..." buttons both open the flow overlay, differing
+  // only in which path it starts on (mock's startFlow, line 669).
+  const openFlow = useCallback(
+    (type: Draft['type']) => {
+      setFlowType(type);
+      setOverlay('flow');
+    },
+    []
+  );
 
   const openPatient = useCallback(
     async (id: string) => {
@@ -342,6 +353,7 @@ export function useAppState() {
     entries,
     chats,
     draft,
+    flowType,
     toast,
     activePatient,
     activeSessionCount,
@@ -352,6 +364,7 @@ export function useAppState() {
     go,
     open,
     close,
+    openFlow,
     openPatient,
     refreshPatients,
     refreshEntries,

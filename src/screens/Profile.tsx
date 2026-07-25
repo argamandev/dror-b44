@@ -8,7 +8,7 @@ interface ProfileProps {
   sessionCount: number;
   onOpenSettings: () => void;
   onGoHome: () => void;
-  onOpenFlow: () => void;
+  onOpenFlow: (type: 'summary' | 'doc') => void;
   onGoWorld: () => void;
 }
 
@@ -140,7 +140,7 @@ export default function Profile({
         <div style={subStyle}>{sessionCount} פגישות</div>
       </div>
       <div style={actionsWrapStyle}>
-        <div onClick={onOpenFlow} style={actionBtnStyle}>
+        <div onClick={() => onOpenFlow('summary')} style={actionBtnStyle}>
           <svg viewBox="0 0 24 24" fill="none" width={22} height={22}>
             <path
               d="M4 20l1.2-4.2L16.6 4.4a2 2 0 012.9 0l0.1 0.1a2 2 0 010 2.9L8.2 18.8 4 20z"
@@ -152,7 +152,7 @@ export default function Profile({
           </svg>
           <span style={actionLabelStyle}>יצירת סיכום פגישה</span>
         </div>
-        <div onClick={onOpenFlow} style={actionBtnStyle}>
+        <div onClick={() => onOpenFlow('doc')} style={actionBtnStyle}>
           <svg viewBox="0 0 24 24" fill="none" width={22} height={22}>
             <path d="M6 2.8h8l4 4v14.4H6V2.8z" stroke="#17171b" strokeWidth={2} strokeLinejoin="round" />
             <path d="M14 2.8v4h4" stroke="#17171b" strokeWidth={2} strokeLinejoin="round" />

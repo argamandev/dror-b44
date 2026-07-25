@@ -11,6 +11,7 @@ import SearchOverlay from '@/overlays/SearchOverlay';
 import PatientContextOverlay from '@/overlays/PatientContextOverlay';
 import MenuDrawer from '@/overlays/MenuDrawer';
 import AppSettingsOverlay from '@/overlays/AppSettingsOverlay';
+import FlowOverlay from '@/overlays/FlowOverlay';
 import AppFrame from '@/components/AppFrame';
 import ChatBar from '@/components/ChatBar';
 import Toast from '@/components/Toast';
@@ -82,9 +83,9 @@ function ScreenPlaceholder({ onHome }: { onHome: () => void }) {
 }
 
 // Overlays not built until later tasks — opening one just surfaces a toast
-// and closes itself again. 'search', 'settings', 'menu' and 'appSettings'
-// are real and excluded here.
-const PLACEHOLDER_OVERLAYS = new Set(['record', 'voice', 'flow']);
+// and closes itself again. 'search', 'settings', 'menu', 'appSettings' and
+// 'flow' are real and excluded here.
+const PLACEHOLDER_OVERLAYS = new Set(['record', 'voice']);
 
 function AuthedApp({ user }: { user: User }) {
   const state = useAppState();
@@ -115,7 +116,7 @@ function AuthedApp({ user }: { user: User }) {
           sessionCount={state.activeSessionCount}
           onOpenSettings={() => state.open('settings')}
           onGoHome={() => state.go('home')}
-          onOpenFlow={() => state.open('flow')}
+          onOpenFlow={(type) => state.openFlow(type)}
           onGoWorld={() => state.go('world')}
         />
       ) : state.screen === 'world' && state.activePatient ? (
@@ -209,6 +210,27 @@ function AuthedApp({ user }: { user: User }) {
       )}
 
       {state.overlay === 'appSettings' && <AppSettingsOverlay user={user} onClose={() => state.close()} />}
+
+      {state.overlay === 'flow' && state.activePatient && (
+        <FlowOverlay
+          flowType={state.flowType}
+          patient={state.activePatient}
+          onClose={() => state.close()}
+          onDraftReady={({ title, body }) => {
+            state.setDraft({
+              id: null,
+              type: state.flowType,
+              patientId: state.activePatient!.id,
+              date: new Date().toISOString(),
+              title,
+              body,
+            });
+            state.close();
+            state.go('draft');
+          }}
+          showToast={state.showToast}
+        />
+      )}
 
       {showChatBar && (
         <ChatBar
