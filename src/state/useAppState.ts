@@ -81,7 +81,9 @@ export function useAppState() {
       return;
     }
     try {
-      setEntries(await listEntries(id));
+      const result = await listEntries(id);
+      if (activeIdRef.current !== id) return;
+      setEntries(result);
     } catch {
       showToast(LOAD_ERROR);
     }

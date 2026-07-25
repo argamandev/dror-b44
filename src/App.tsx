@@ -144,19 +144,19 @@ export default function App() {
 
   if (loading) {
     return (
-      <div
-        dir="rtl"
-        lang="he"
-        style={{
-          minHeight: '100dvh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'var(--bg-warm)',
-        }}
-      >
-        <dror-orb size="80" state="thinking" />
-      </div>
+      <AppFrame>
+        <div
+          dir="rtl"
+          lang="he"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <dror-orb size="80" state="thinking" />
+        </div>
+      </AppFrame>
     );
   }
 

@@ -65,10 +65,16 @@ export default function ChatBar({ screen, activePatientName, onOpenRecord, setHo
       : `על מה אני ו${activePatientName ?? ''} דיברנו בפגישה הקודמת?`;
 
   const handleSend = () => {
-    setText('');
-    setHomeOrb('thinking');
-    clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setHomeOrb('idle'), 2600);
+    const trimmed = text.trim();
+    if (screen === 'home' || !trimmed) {
+      setText('');
+      setHomeOrb('thinking');
+      clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setHomeOrb('idle'), 2600);
+    } else {
+      // Task 7 wires real send here
+      setText('');
+    }
   };
 
   return (
