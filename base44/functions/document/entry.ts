@@ -127,12 +127,17 @@ Deno.serve(async (req: Request) => {
       // Session position = chronological index (oldest=1) among this patient's
       // non-draft summaries — mirrors the frontend's numbering (src/api/format.ts
       // sessionCount, and the design mock's docMeetingChips) so the numbers the
-      // therapist picked in the UI line up with the records selected here.
-      const priorSummaries = (await base44.entities.Entry.filter({
-        patient_id: patientId,
-        type: "summary",
-        is_draft: false,
-      })) as Entry[];
+      // therapist picked in the UI line up with the records selected here. Sort
+      // and limit are passed explicitly (not left to the SDK's filter()
+      // defaults of '-created_date' + limit 50) so a patient with >50 non-draft
+      // summaries doesn't get silently truncated+re-numbered here. The local
+      // sort below is now a no-op safeguard given the explicit 'entry_date'
+      // sort, kept in case the backend's sort guarantee ever changes.
+      const priorSummaries = (await base44.entities.Entry.filter(
+        { patient_id: patientId, type: "summary", is_draft: false },
+        "entry_date",
+        5000
+      )) as Entry[];
       const chronological = [...priorSummaries].sort(
         (a, b) => new Date(a.entry_date).getTime() - new Date(b.entry_date).getTime()
       );

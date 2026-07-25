@@ -77,13 +77,16 @@ Deno.serve(async (req: Request) => {
     )) as Entry[];
 
     // Session number = count of this patient's non-draft session summaries + 1
-    // (mirrors src/api/format.ts's sessionCount on the frontend). Unbounded —
-    // separate from the capped recentEntries context block above.
-    const priorSummaries = (await base44.entities.Entry.filter({
-      patient_id: patientId,
-      type: "summary",
-      is_draft: false,
-    })) as Entry[];
+    // (mirrors src/api/format.ts's sessionCount on the frontend). Separate from
+    // the capped recentEntries context block above — this one must see the
+    // FULL history, so sort/limit are passed explicitly rather than relying on
+    // the SDK's filter() defaults ('-created_date', limit 50), which would
+    // silently truncate (and thus miscount) any patient past 50 summaries.
+    const priorSummaries = (await base44.entities.Entry.filter(
+      { patient_id: patientId, type: "summary", is_draft: false },
+      "entry_date",
+      5000
+    )) as Entry[];
     const nextSession = priorSummaries.length + 1;
 
     const historyBlock = recentEntries.length
