@@ -41,9 +41,10 @@ type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
 const FATAL_RECOGNITION_ERRORS = new Set(['not-allowed', 'service-not-allowed', 'audio-capture']);
 
 // Subset of the fatal errors above that specifically mean "no mic access" —
-// surfaced to the UI via `micError` so a denied/unavailable mic shows a
-// visible notice instead of a fake "listening" state.
-const MIC_ACCESS_RECOGNITION_ERRORS = new Set(['not-allowed', 'service-not-allowed']);
+// surfaced to the UI via `micError` so a denied/unavailable mic (including a
+// mid-session disconnect, 'audio-capture') shows a visible notice instead of
+// a fake "listening" state.
+const MIC_ACCESS_RECOGNITION_ERRORS = new Set(['not-allowed', 'service-not-allowed', 'audio-capture']);
 
 declare global {
   interface Window {

@@ -226,6 +226,11 @@ export default function FlowOverlay({ flowType, patient, onClose, onDraftReady, 
   // Safety net: release the mic if the overlay unmounts without going
   // through handleClose/handleFinishRecording (e.g. parent swaps overlays).
   useEffect(() => {
+    // StrictMode (dev) double-invokes this effect (setup→cleanup→setup) on
+    // every fresh mount to surface non-idempotent effects — without this,
+    // the first cleanup's closedRef.current = true would never get undone,
+    // permanently wedging handleCreateDraft's success path closed.
+    closedRef.current = false;
     return () => {
       closedRef.current = true;
       recorder.stop().catch(() => {});
