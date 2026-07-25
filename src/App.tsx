@@ -215,6 +215,7 @@ function AuthedApp({ user }: { user: User }) {
         <FlowOverlay
           flowType={state.flowType}
           patient={state.activePatient}
+          sessionCount={state.activeSessionCount}
           onClose={() => state.close()}
           onDraftReady={({ title, body }) => {
             state.setDraft({

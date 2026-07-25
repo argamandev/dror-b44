@@ -1,29 +1,30 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { Patient } from '@/api/data';
 import { fullName, fmtTimer } from '@/api/format';
-import { summarizeSession } from '@/api/ai';
+import { summarizeSession, draftDocument } from '@/api/ai';
 import { useSessionRecorder } from '@/hooks/useSessionRecorder';
 
 // Ported verbatim from the design mock (lines 335-401 for the summary path,
-// 342-352/444-452 for the shared chrome — step dots, back link, generating
-// state). This task builds the summary path in full; the doc path (mock
-// docS1-3, lines 402-443) is a placeholder panel until Task 9, which will
-// slot its own steps in next to the summary ones below without touching this
-// shell (backdrop/close/header/dots/back-link/generating already handle both
-// `flowType`s).
+// 402-443 for the doc path, 342-352/444-452 for the shared chrome — step
+// dots, back link, generating state — which already handles both
+// `flowType`s without modification).
 export type FlowType = 'summary' | 'doc';
 type FlowStep = 1 | 2 | 3;
 type FlowMethod = 'record' | 'text' | null;
+type DocMeetingsMode = 'all' | 'some';
 
 interface FlowOverlayProps {
   flowType: FlowType;
   patient: Patient;
+  /** This patient's non-draft session-summary count (mock's `p.sessions`) — sizes the docS3 meeting chips/subtitles. */
+  sessionCount: number;
   onClose: () => void;
   onDraftReady: (result: { title: string; body: string }) => void;
   showToast: (text: string) => void;
 }
 
-const SUMMARIZE_ERROR = 'דרור לא הצליח לנסח, נסו שוב';
+// Shared by both flows' generation failure (mock has one `createDraft` path for both).
+const DRAFT_ERROR = 'דרור לא הצליח לנסח, נסו שוב';
 
 const backdropStyle: CSSProperties = {
   position: 'absolute',
@@ -205,9 +206,74 @@ const generatingTextStyle: CSSProperties = {
   color: '#ffffff',
 };
 
-const docPlaceholderStyle: CSSProperties = { marginTop: 26, textAlign: 'center', fontSize: 15, color: 'rgba(255,255,255,0.75)' };
+const docLabelStyle: CSSProperties = { ...guideLabelStyle };
+const docMeetLabelStyle: CSSProperties = { ...guideLabelStyle, marginBottom: 12 };
 
-export default function FlowOverlay({ flowType, patient, onClose, onDraftReady, showToast }: FlowOverlayProps) {
+const docTypeInputStyle: CSSProperties = {
+  width: '100%',
+  border: 'none',
+  outline: 'none',
+  background: '#ffffff',
+  borderRadius: 18,
+  padding: '15px 18px',
+  fontSize: 15,
+  color: '#17171b',
+  textAlign: 'right',
+  boxSizing: 'border-box',
+  boxShadow: '0 14px 34px rgba(0,0,0,0.25)',
+};
+const chipsRowStyle: CSSProperties = { display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 14 };
+const docTypeChipStyle: CSSProperties = {
+  padding: '9px 16px',
+  borderRadius: 999,
+  background: 'rgba(255,255,255,0.10)',
+  border: '1px solid rgba(255,255,255,0.18)',
+  fontSize: 13.5,
+  color: '#ffffff',
+  cursor: 'pointer',
+};
+const docPurposeTextareaStyle: CSSProperties = { ...textareaStyle, height: 130 };
+
+function meetBarStyle(on: boolean): CSSProperties {
+  return {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 22,
+    padding: '17px 20px',
+    cursor: 'pointer',
+    backdropFilter: 'blur(6px)',
+    WebkitBackdropFilter: 'blur(6px)',
+    border: '1px solid rgba(255,255,255,0.18)',
+    background: on ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.10)',
+    color: on ? '#17171b' : '#ffffff',
+  };
+}
+const meetBarSecondStyle = (on: boolean): CSSProperties => ({ ...meetBarStyle(on), marginTop: 10 });
+const meetMainStyle: CSSProperties = { fontFamily: 'Calibri,Assistant,sans-serif', fontSize: 16, fontWeight: 600 };
+const meetSubStyle: CSSProperties = { fontSize: 12.5, opacity: 0.65 };
+
+function meetingChipStyle(selected: boolean): CSSProperties {
+  return {
+    padding: '9px 16px',
+    borderRadius: 999,
+    fontSize: 13.5,
+    cursor: 'pointer',
+    border: '1px solid rgba(255,255,255,0.18)',
+    background: selected ? '#ffffff' : 'rgba(255,255,255,0.10)',
+    color: selected ? '#17171b' : '#ffffff',
+    fontWeight: selected ? 600 : 400,
+  };
+}
+
+export default function FlowOverlay({
+  flowType,
+  patient,
+  sessionCount,
+  onClose,
+  onDraftReady,
+  showToast,
+}: FlowOverlayProps) {
   const name = fullName(patient);
   const recorder = useSessionRecorder();
 
@@ -216,6 +282,12 @@ export default function FlowOverlay({ flowType, patient, onClose, onDraftReady, 
   const [notes, setNotes] = useState('');
   const [guide, setGuide] = useState('');
   const [generating, setGenerating] = useState(false);
+
+  // docS1-3 state (mock's docType/docPurpose/docMeetings/docPicked, lines 669/795-813).
+  const [docType, setDocType] = useState('');
+  const [docPurpose, setDocPurpose] = useState('');
+  const [docMeetingsMode, setDocMeetingsMode] = useState<DocMeetingsMode>('all');
+  const [docPicked, setDocPicked] = useState<number[]>([]);
 
   // Tracks whether the overlay has been closed (via the X or by unmounting)
   // so an in-flight summarizeSession() that resolves afterwards can be
@@ -296,7 +368,48 @@ export default function FlowOverlay({ flowType, patient, onClose, onDraftReady, 
       onDraftReady(result);
     } catch {
       if (closedRef.current) return;
-      showToast(SUMMARIZE_ERROR);
+      showToast(DRAFT_ERROR);
+      setGenerating(false);
+    }
+  };
+
+  // docS1: a chip pick sets the type AND advances to docS2 in one step (mock
+  // line 797); typed free text just updates docType and stays on docS1 until
+  // the therapist taps המשך (docTypeReady gate below).
+  const handlePickDocTypeChip = (label: string) => {
+    setDocType(label);
+    setStep(2);
+  };
+  const handleContinueFromDocType = () => setStep(2);
+  const docTypeReady = docType.trim().length > 0;
+
+  const handleContinueFromPurpose = () => setStep(3);
+
+  const handlePickMeetingsAll = () => setDocMeetingsMode('all');
+  const handlePickMeetingsSome = () => setDocMeetingsMode('some');
+  const handleToggleMeeting = (n: number) => {
+    setDocPicked((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]));
+  };
+
+  // Newest-first, capped at 8, mirroring the mock's docMeetingChips (line 808).
+  const docMeetingNumbers = Array.from({ length: Math.min(sessionCount, 8) }, (_, i) => sessionCount - i);
+  const docMeetingsGuardBlocked = docMeetingsMode === 'some' && docPicked.length === 0;
+
+  const handleCreateDocDraft = async () => {
+    if (docMeetingsGuardBlocked || generating) return;
+    setGenerating(true);
+    try {
+      const result = await draftDocument({
+        patientId: patient.id,
+        docType: docType.trim(),
+        purpose: docPurpose.trim(),
+        meetings: docMeetingsMode === 'all' ? 'all' : docPicked,
+      });
+      if (closedRef.current) return; // overlay closed mid-generate — drop the result silently
+      onDraftReady(result);
+    } catch {
+      if (closedRef.current) return;
+      showToast(DRAFT_ERROR);
       setGenerating(false);
     }
   };
@@ -429,7 +542,79 @@ export default function FlowOverlay({ flowType, patient, onClose, onDraftReady, 
           </div>
         )}
 
-        {!generating && flowType === 'doc' && <div style={docPlaceholderStyle}>בקרוב</div>}
+        {!generating && flowType === 'doc' && step === 1 && (
+          <div style={stepWrapStyle}>
+            <div style={docLabelStyle}>איזה מסמך צריך?</div>
+            <input
+              dir="rtl"
+              placeholder="למשל: אישור טיפול, חוות דעת…"
+              value={docType}
+              onChange={(e) => setDocType(e.target.value)}
+              style={docTypeInputStyle}
+            />
+            <div style={chipsRowStyle}>
+              {['אישור טיפול', 'מכתב לקופת חולים', 'מסמך אינטייק', 'חוות דעת'].map((label) => (
+                <div key={label} onClick={() => handlePickDocTypeChip(label)} style={docTypeChipStyle}>
+                  {label}
+                </div>
+              ))}
+            </div>
+            {docTypeReady && (
+              <button type="button" onClick={handleContinueFromDocType} style={continueBtnStyle}>
+                המשך
+              </button>
+            )}
+          </div>
+        )}
+
+        {!generating && flowType === 'doc' && step === 2 && (
+          <div style={stepWrapStyle}>
+            <div style={docLabelStyle}>
+              מה מטרת המסמך? <span style={guideOptionalStyle}>+ הנחיות לדרור</span>
+            </div>
+            <textarea
+              dir="rtl"
+              placeholder="למשל: מסמך לביטוח לאומי שמדגיש את הצורך בהמשך טיפול…"
+              value={docPurpose}
+              onChange={(e) => setDocPurpose(e.target.value)}
+              style={docPurposeTextareaStyle}
+            />
+            <button type="button" onClick={handleContinueFromPurpose} style={continueBtnStyle}>
+              המשך
+            </button>
+          </div>
+        )}
+
+        {!generating && flowType === 'doc' && step === 3 && (
+          <div style={stepWrapStyle}>
+            <div style={docMeetLabelStyle}>על אילו פגישות להסתמך?</div>
+            <div onClick={handlePickMeetingsAll} style={meetBarStyle(docMeetingsMode === 'all')}>
+              <span style={meetMainStyle}>כל הפגישות</span>
+              <span style={meetSubStyle}>{sessionCount} פגישות</span>
+            </div>
+            <div onClick={handlePickMeetingsSome} style={meetBarSecondStyle(docMeetingsMode === 'some')}>
+              <span style={meetMainStyle}>בחירת פגישות ספציפיות</span>
+              <span style={meetSubStyle}>{docPicked.length > 0 ? `נבחרו ${docPicked.length}` : ''}</span>
+            </div>
+            {docMeetingsMode === 'some' && (
+              <div style={chipsRowStyle}>
+                {docMeetingNumbers.map((n) => (
+                  <div key={n} onClick={() => handleToggleMeeting(n)} style={meetingChipStyle(docPicked.includes(n))}>
+                    {`פגישה ${n}`}
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={handleCreateDocDraft}
+              disabled={docMeetingsGuardBlocked}
+              style={docMeetingsGuardBlocked ? continueBtnDisabledStyle : continueBtnStyle}
+            >
+              יצירת טיוטה
+            </button>
+          </div>
+        )}
 
         {backable && (
           <div onClick={handleBack} style={backLinkStyle}>

@@ -162,6 +162,46 @@ export async function summarizeSession(args: SummarizeSessionArgs): Promise<Summ
   return { title: result.title, body: result.body };
 }
 
+// Transport to the `document` Deno function (base44/functions/document/entry.ts).
+// Same request/response shape as summarizeSession above — no conversation, no
+// streaming, `.data` off the raw axios response, one Error on any failure so
+// the FlowOverlay's catch path (toast + back to docS3) has one shape to handle.
+export interface DraftDocumentArgs {
+  patientId: string;
+  /** Free-text or chip-picked document type, e.g. "אישור טיפול". */
+  docType: string;
+  /** Therapist's stated goal/guidance for this document. */
+  purpose: string;
+  /** 'all' entries, or the specific (1-indexed, oldest=1) session numbers picked. */
+  meetings: 'all' | number[];
+}
+
+export interface DraftDocumentResult {
+  title: string;
+  body: string;
+}
+
+export async function draftDocument(args: DraftDocumentArgs): Promise<DraftDocumentResult> {
+  const { patientId, docType, purpose, meetings } = args;
+  let data: unknown;
+  try {
+    const res = await base44.functions.invoke('document', {
+      patient_id: patientId,
+      doc_type: docType,
+      purpose,
+      meetings,
+    });
+    data = res.data;
+  } catch {
+    throw new Error('DOCUMENT_FAILED');
+  }
+  const result = data as Partial<DraftDocumentResult> | undefined;
+  if (!result || typeof result.title !== 'string' || typeof result.body !== 'string') {
+    throw new Error('DOCUMENT_FAILED');
+  }
+  return { title: result.title, body: result.body };
+}
+
 export async function askDror(args: AskDrorArgs): Promise<AskDrorResult> {
   const { message, patientId, patientName, conversationId } = args;
 
