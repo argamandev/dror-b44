@@ -198,6 +198,12 @@ export function useAppState() {
       const text = raw.trim();
       if (!text) return;
 
+      // Engage the guard for BOTH branches — a home send is just as capable of
+      // racing a second send (and a second agent conversation, since no
+      // conversationId exists yet) as a patient/chat-screen send is. homeOrb
+      // still separately drives the Home orb's own thinking visual below.
+      setChatThinkingBoth(true);
+
       // The live chat on screen (if any) is the source of truth for scope —
       // follow-ups always continue that chat, regardless of a leftover
       // activeId from a previously-viewed patient. Only a brand-new chat
@@ -219,7 +225,6 @@ export function useAppState() {
       if (fromHome) {
         setHomeOrb('thinking');
       } else {
-        setChatThinkingBoth(true);
         setScreen('chat');
       }
 
