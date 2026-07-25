@@ -146,9 +146,9 @@ export default function App() {
     return (
       <AppFrame>
         <div
-          dir="rtl"
-          lang="he"
           style={{
+            position: 'absolute',
+            inset: 0,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
