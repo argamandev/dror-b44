@@ -1,6 +1,8 @@
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { ChatMsg } from '@/api/data';
 import { renderAssistantText } from '@/ui/richText';
+import { useStreamedText } from '@/hooks/useStreamedText';
+import TypingDots from '@/components/TypingDots';
 
 // Ported verbatim from the design mock (lines 142-171, "PATIENT CHAT"), with the
 // bubble/row styles from the mock's renderVals (lines 677-683). Used for both a
@@ -75,8 +77,14 @@ const listStyle: CSSProperties = {
   padding: '8px 4px',
 };
 
-const drorRowStyle: CSSProperties = { display: 'flex', gap: 10, alignItems: 'flex-start' };
-const userRowStyle: CSSProperties = { display: 'flex', justifyContent: 'flex-start' };
+// Enter animation for every row (message or thinking indicator). Applied via
+// `animation` on the row itself — since rows are append-only and keyed by
+// index (never remounted on re-render), it plays once on arrival and never
+// replays for older messages.
+const ENTER_ANIM = 'drRise 0.22s ease';
+
+const drorRowStyle: CSSProperties = { display: 'flex', gap: 10, alignItems: 'flex-start', animation: ENTER_ANIM };
+const userRowStyle: CSSProperties = { display: 'flex', justifyContent: 'flex-start', animation: ENTER_ANIM };
 
 const drorBubbleStyle: CSSProperties = {
   fontSize: 14.5,
@@ -99,17 +107,55 @@ const userBubbleStyle: CSSProperties = {
 
 const orbSlotStyle: CSSProperties = { flex: 'none', marginTop: 2 };
 
-const thinkingRowStyle: CSSProperties = { display: 'flex', gap: 10, alignItems: 'flex-start' };
-const thinkingTextStyle: CSSProperties = { fontSize: 14, color: '#9a9ca1', paddingTop: 4 };
+const thinkingRowStyle: CSSProperties = { display: 'flex', gap: 10, alignItems: 'flex-start', animation: ENTER_ANIM };
 
 export default function PatientChat({ title, messages, thinking, onBack }: PatientChatProps) {
   const listRef = useRef<HTMLDivElement | null>(null);
 
-  // Keep the newest message / thinking row in view as the conversation grows.
+  // Which message index is the newest Dror reply — the ONLY one that
+  // simulated-streams; every older message (and the thinking row's own
+  // orb+dots) renders/plays its enter animation once and stays put. Tracked
+  // in component state rather than derived on every render so an older
+  // reply that already finished streaming doesn't restart when a later
+  // message is appended.
+  //
+  // Detecting "a new message was appended" by array length alone isn't
+  // enough: this screen stays mounted (never remounts) when the therapist
+  // switches from a live conversation to a DIFFERENT, already-saved chat via
+  // the menu's history list — that swap is also a `messages` prop change,
+  // just not an append. So a genuine append is recognized structurally: the
+  // previous array's elements must all still be present, in place, at the
+  // front of the new one (message objects are never recreated in place —
+  // sendChat only ever spreads the old array plus one new entry). Anything
+  // else (a wholesale different chat loaded) clears streaming instead of
+  // simulate-streaming a historical reply that already fully "arrived".
+  const [streamIndex, setStreamIndex] = useState<number | null>(null);
+  const prevMessagesRef = useRef(messages);
+
+  useEffect(() => {
+    const prev = prevMessagesRef.current;
+    if (messages !== prev) {
+      const isAppend = messages.length > prev.length && prev.every((m, idx) => m === messages[idx]);
+      if (isAppend) {
+        const lastIdx = messages.length - 1;
+        if (messages[lastIdx]?.role === 'dror') setStreamIndex(lastIdx);
+      } else {
+        setStreamIndex(null);
+      }
+      prevMessagesRef.current = messages;
+    }
+  }, [messages]);
+
+  const streamText = streamIndex !== null ? messages[streamIndex]?.text ?? '' : '';
+  const { shown: streamedShown } = useStreamedText(streamText, streamIndex !== null);
+
+  // ChatGPT parity: smooth-scroll to the bottom on message count change, the
+  // thinking indicator toggling, and every streaming reveal tick — pinning
+  // the view to the bottom for the whole duration of a streamed reply.
   useEffect(() => {
     const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, thinking]);
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  }, [messages.length, thinking, streamedShown.length]);
 
   return (
     <>
@@ -131,7 +177,9 @@ export default function PatientChat({ title, messages, thinking, onBack }: Patie
           m.role === 'dror' ? (
             <div key={i} style={drorRowStyle}>
               <dror-orb size="26" state="idle" style={orbSlotStyle} />
-              <div data-selectable style={drorBubbleStyle}>{renderAssistantText(m.text)}</div>
+              <div data-selectable style={drorBubbleStyle}>
+                {renderAssistantText(i === streamIndex ? streamedShown : m.text)}
+              </div>
             </div>
           ) : (
             <div key={i} style={userRowStyle}>
@@ -142,7 +190,7 @@ export default function PatientChat({ title, messages, thinking, onBack }: Patie
         {thinking && (
           <div style={thinkingRowStyle}>
             <dror-orb size="26" state="thinking" style={orbSlotStyle} />
-            <div style={thinkingTextStyle}>דרור חושב…</div>
+            <TypingDots />
           </div>
         )}
       </div>

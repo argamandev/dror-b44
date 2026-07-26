@@ -230,10 +230,13 @@ export function useAppState() {
     [draft, patients, showToast, setActiveIdBoth, refreshEntries]
   );
 
-  // Send a message to the Dror agent. `fromHome` is passed by the ChatBar (which
-  // knows the current screen): a home send stays on Home with the orb thinking
-  // until the reply lands, then opens the general chat; a patient send opens the
-  // chat immediately with a thinking bubble. Mirrors mock sendChat (lines 690-704)
+  // Send a message to the Dror agent. `fromHome` is passed by the ChatBar
+  // (which knows the current screen) and only affects chat SCOPE (general vs.
+  // patient) — every send, Home included, opens the chat screen in the same
+  // tick: user bubble appended + typing indicator on, before the agent call
+  // even starts (ChatGPT-grade instant open; Task N2). Home's orb still
+  // pulses to `thinking` as a fire-and-forget accent, but nothing waits on
+  // it and it never gates navigation. Mirrors mock sendChat (lines 690-704)
   // but the reply is the real agent, and each exchange is persisted as a Chat.
   const sendChat = useCallback(
     async (raw: string, fromHome: boolean) => {
@@ -270,11 +273,13 @@ export function useAppState() {
       const withUser: ActiveChat = { ...base, messages: [...base.messages, userMsg] };
       setActiveChatBoth(withUser);
 
-      if (fromHome) {
-        setHomeOrb('thinking');
-      } else {
-        setScreen('chat');
-      }
+      // Instant open — for EVERY send, synchronously, before the async agent
+      // call starts: the chat screen is showing the user's own bubble and
+      // the typing indicator immediately. The old "stay on Home pulsing the
+      // orb until the reply" wait state is gone; a home send's orb pulse
+      // below is now just a transient accent that plays out off-screen.
+      setScreen('chat');
+      if (fromHome) setHomeOrb('thinking');
 
       let answer: string;
       let conversationId: string;
@@ -290,16 +295,8 @@ export function useAppState() {
       } catch {
         setHomeOrb('idle');
         setChatThinkingBoth(false);
-        if (fromHome && !continuing) {
-          // A FIRST message sent from Home that never got an answer has no
-          // conversation behind it — opening the chat screen would drop the
-          // therapist into a dead thread holding only their own line. Stay on
-          // Home with the orb back at idle and discard the half-started chat;
-          // the toast is the whole error report.
-          setActiveChatBoth(EMPTY_CHAT);
-        } else {
-          setScreen('chat'); // keep the user's message visible in the open thread
-        }
+        // Remain on the chat screen — the user's bubble stays put as a
+        // natural retry point; only the toast reports the failure.
         showToast(ASK_ERROR);
         return;
       }
