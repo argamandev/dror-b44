@@ -131,11 +131,11 @@ export default function PatientChat({ title, messages, thinking, onBack }: Patie
           m.role === 'dror' ? (
             <div key={i} style={drorRowStyle}>
               <dror-orb size="26" state="idle" style={orbSlotStyle} />
-              <div style={drorBubbleStyle}>{renderAssistantText(m.text)}</div>
+              <div data-selectable style={drorBubbleStyle}>{renderAssistantText(m.text)}</div>
             </div>
           ) : (
             <div key={i} style={userRowStyle}>
-              <div style={userBubbleStyle}>{m.text}</div>
+              <div data-selectable style={userBubbleStyle}>{m.text}</div>
             </div>
           )
         )}

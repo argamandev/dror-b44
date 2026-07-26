@@ -154,7 +154,7 @@ export default function DraftEditor({ draft, draftFrom, onBodyChange, onClose, o
           </svg>
         )}
       </div>
-      <div style={titleWrapStyle}>
+      <div data-selectable style={titleWrapStyle}>
         <div style={titleStyle}>{draft.title}</div>
         <div dir="ltr" style={dateStyle}>
           {fmtDate(draft.date)}

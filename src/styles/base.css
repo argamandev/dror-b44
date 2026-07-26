@@ -1,16 +1,45 @@
 *{box-sizing:border-box;scrollbar-width:none}
+*{-webkit-tap-highlight-color:transparent}
 
 html,body,#root{height:100%}
+
+/* Native app shell (Task N1): no rubber-band scroll past the column, and the
+   page background matches the app's warm bg so standalone mode never shows
+   white beyond the centered column. */
+html{
+  overscroll-behavior:none;
+  background:var(--bg-warm);
+}
+
+/* touch-action:manipulation kills the double-tap-to-zoom gesture and the
+   ~300ms tap delay on mobile browsers — makes taps feel instant, like a
+   native app rather than a web page. */
+html,body{
+  touch-action:manipulation;
+}
 
 body{
   margin:0;
   min-height:100dvh;
   font-family:var(--font-sans);
   color:var(--text);
-  background:var(--bg);
+  background:var(--bg-warm);
+  overscroll-behavior:none;
   padding-top:env(safe-area-inset-top);
   padding-bottom:env(safe-area-inset-bottom);
   -webkit-font-smoothing:antialiased;
+  /* App chrome (labels, buttons, icons) isn't selectable — feels native.
+     Re-enabled below for inputs/textareas and anything explicitly marked
+     data-selectable (chat message text, draft title/date). */
+  user-select:none;
+  -webkit-user-select:none;
+  -webkit-touch-callout:none;
+}
+
+input,textarea,[data-selectable]{
+  user-select:text;
+  -webkit-user-select:text;
+  -webkit-touch-callout:default;
 }
 
 a{color:var(--ink);text-decoration:none}
