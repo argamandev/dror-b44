@@ -142,6 +142,8 @@ class DrorOrb extends HTMLElement {
     super();
     this._mood = 0.5; this._talk = 0;
     this._target = STATES.idle;
+    this._rafId = null;
+    this._retryTimers = [];
   }
   connectedCallback(){
     if (this._canvas) return;
@@ -157,6 +159,23 @@ class DrorOrb extends HTMLElement {
     this._canvas = c;
     this._applyState();
     this._initGL();
+  }
+  disconnectedCallback(){
+    if (this._rafId != null){
+      cancelAnimationFrame(this._rafId);
+      this._rafId = null;
+    }
+    if (this._retryTimers.length){
+      this._retryTimers.forEach(id => clearTimeout(id));
+      this._retryTimers = [];
+    }
+    if (this._gl){
+      const ext = this._gl.getExtension('WEBGL_lose_context');
+      if (ext) ext.loseContext();
+    }
+    if (this._canvas && this._canvas.parentNode === this) this.removeChild(this._canvas);
+    this._canvas = null;
+    this._gl = null;
   }
   attributeChangedCallback(name){
     if (name === 'state') this._applyState();
@@ -178,17 +197,46 @@ class DrorOrb extends HTMLElement {
     if (this._gl) this._gl.viewport(0, 0, this._canvas.width, this._canvas.height);
   }
   _initGL(){
+    if (this._tryInitGL()) return;
+    // First attempt failed — WebGL context creation can fail transiently
+    // during navigation/teardown (GL race). Show the animated fallback and
+    // keep retrying in the background in case the context becomes available.
+    this._applyFallback();
+    this._scheduleRetries();
+  }
+  _scheduleRetries(){
+    [400, 1200, 3000].forEach(delay => {
+      const id = setTimeout(() => {
+        this._retryTimers = this._retryTimers.filter(t => t !== id);
+        if (!this.isConnected || this._gl) return;
+        if (this._tryInitGL()) this._clearFallback();
+      }, delay);
+      this._retryTimers.push(id);
+    });
+  }
+  _applyFallback(){
+    if (!this._canvas) return;
+    // Fallback paints the HOST, not the canvas: a failed canvas can leave a
+    // stale/opaque bitmap that composites over a canvas-level CSS background,
+    // showing as a white disc. Painting `this` instead sidesteps that.
+    this._canvas.style.display = 'none';
+    this.style.background = 'radial-gradient(circle at 40% 35%, #FBF6EF 0%, #F6D9C4 30%, #A9B9F9 60%, #6B71F6 100%)';
+    this.style.borderRadius = '50%';
+    // Animated no-WebGL fallback — keeps the "always breathing" product
+    // decision (below) true even without a GPU: a slow hue/scale drift
+    // instead of a static gradient.
+    injectFallbackKeyframes();
+    this.style.animation = 'drorOrbFallback 9s ease-in-out infinite alternate';
+  }
+  _clearFallback(){
+    if (this._canvas) this._canvas.style.display = 'block';
+    this.style.background = '';
+    this.style.animation = '';
+    this.style.borderRadius = '';
+  }
+  _tryInitGL(){
     const gl = this._canvas.getContext('webgl', {antialias:true, alpha:true, premultipliedAlpha:false});
-    if (!gl){
-      this._canvas.style.background = 'radial-gradient(circle at 40% 35%, #FBF6EF 0%, #F6D9C4 30%, #A9B9F9 60%, #6B71F6 100%)';
-      this._canvas.style.borderRadius = '50%';
-      // Animated no-WebGL fallback — keeps the "always breathing" product
-      // decision (below) true even without a GPU: a slow hue/scale drift
-      // instead of a static gradient.
-      injectFallbackKeyframes();
-      this._canvas.style.animation = 'drorOrbFallback 9s ease-in-out infinite alternate';
-      return;
-    }
+    if (!gl) return false;
     this._gl = gl;
     const compile = (type, src) => {
       const sh = gl.createShader(type);
@@ -223,7 +271,12 @@ class DrorOrb extends HTMLElement {
     // signal, in the app as well as everywhere else.
     const start = performance.now() - Math.random()*40000; // desync multiple orbs
     const frame = now => {
-      if (!this.isConnected){ this._canvas = null; return; }
+      if (!this.isConnected){
+        // Backstop only — disconnectedCallback is the primary teardown path
+        // and already cancels the RAF loop via the stored id.
+        if (this._rafId != null){ cancelAnimationFrame(this._rafId); this._rafId = null; }
+        return;
+      }
       const t = (now - start)/1000;
       this._mood += (this._target.mood - this._mood) * 0.03;
       this._talk += (this._target.talk - this._talk) * 0.06;
@@ -234,9 +287,10 @@ class DrorOrb extends HTMLElement {
       gl.uniform1f(uVoice, voiceEnvelope(t));
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
-      requestAnimationFrame(frame);
+      this._rafId = requestAnimationFrame(frame);
     };
-    requestAnimationFrame(frame);
+    this._rafId = requestAnimationFrame(frame);
+    return true;
   }
 }
 if (!customElements.get('dror-orb')) customElements.define('dror-orb', DrorOrb);
