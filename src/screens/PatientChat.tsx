@@ -66,7 +66,10 @@ const titleStyle: CSSProperties = {
 const listStyle: CSSProperties = {
   position: 'absolute',
   top: 130,
-  bottom: 168,
+  // Grows by --kb-inset (useKeyboardInset.ts) so the iOS keyboard — which
+  // doesn't shrink the layout viewport — never covers the tail of the
+  // conversation; the scroll-to-bottom effect below re-pins on every change.
+  bottom: 'calc(168px + var(--kb-inset, 0px))',
   left: 20,
   right: 20,
   zIndex: 4,
@@ -156,6 +159,19 @@ export default function PatientChat({ title, messages, thinking, onBack }: Patie
     const el = listRef.current;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
   }, [messages.length, thinking, streamedShown.length]);
+
+  // The iOS keyboard opening/closing changes --kb-inset, which grows/shrinks
+  // this list's own `bottom` offset (see listStyle) — re-pin to the bottom
+  // so the keyboard sliding up doesn't leave the latest message hidden
+  // behind it mid-conversation. useKeyboardInset.ts dispatches this event.
+  useEffect(() => {
+    const onKbInsetChange = () => {
+      const el = listRef.current;
+      if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    };
+    window.addEventListener('kb-inset-change', onKbInsetChange);
+    return () => window.removeEventListener('kb-inset-change', onKbInsetChange);
+  }, []);
 
   return (
     <>

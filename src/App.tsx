@@ -19,6 +19,7 @@ import ChatBar from '@/components/ChatBar';
 import Toast from '@/components/Toast';
 import { useAppState } from '@/state/useAppState';
 import { setChromeColor } from '@/ui/chromeColor';
+import { useKeyboardInset } from '@/hooks/useKeyboardInset';
 
 type User = { email: string; full_name?: string };
 
@@ -286,6 +287,11 @@ function AuthedApp({ user }: { user: User }) {
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Mounted once here so it's active across every state this component can
+  // render — the loading spinner, Login, and AuthedApp — rather than
+  // scoped to any one of them.
+  useKeyboardInset();
 
   const refresh = useCallback(async () => {
     setLoading(true);

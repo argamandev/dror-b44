@@ -26,6 +26,14 @@ interface FlowOverlayProps {
 // Shared by both flows' generation failure (mock has one `createDraft` path for both).
 const DRAFT_ERROR = 'דרור לא הצליח לנסח, נסו שוב';
 
+// Gate the record option on mic availability, not SpeechRecognition support.
+// useSessionRecorder records fine via MediaRecorder without live
+// transcription (falls back to `transcriptUnavailable`, surfaced by
+// TRANSCRIPT_UNAVAILABLE_NOTICE once the recording step is open) — hiding
+// the option on every non-Chrome browser defeated that resilience. Only omit
+// it entirely when there's no mic API at all to record with.
+const MIC_AVAILABLE = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+
 const backdropStyle: CSSProperties = {
   position: 'absolute',
   inset: 0,
@@ -455,7 +463,7 @@ export default function FlowOverlay({
 
         {!generating && flowType === 'summary' && step === 1 && (
           <div style={optionsWrapStyle}>
-            {recorder.supported && (
+            {MIC_AVAILABLE && (
               <div onClick={handlePickRecord} style={optionCardStyle}>
                 <svg viewBox="0 0 24 24" fill="none" width={24} height={24} style={optionIconStyle}>
                   <rect x={8} y={2} width={8} height={13} rx={4} stroke="#fff" strokeWidth={2} />
@@ -483,7 +491,7 @@ export default function FlowOverlay({
                 <div style={optionSubStyle}>רושמים כמה שורות, דרור מנסח</div>
               </div>
             </div>
-            {!recorder.supported && <div style={noticeStyle}>הקלטה חיה נתמכת כרגע בכרום</div>}
+            {!MIC_AVAILABLE && <div style={noticeStyle}>הקלטה אינה זמינה בדפדפן הזה</div>}
           </div>
         )}
 
