@@ -25,13 +25,16 @@ function gradientDefs(id) {
   return `<radialGradient id="${id}" cx="40%" cy="35%" r="75%">${stops}</radialGradient>`;
 }
 
-// Regular icon: Dawn-orb disc on a transparent background (used for the
-// apple-touch-icon and the manifest's 192/512 "any" purpose icons).
+// Regular icon: Dawn-orb disc on an opaque ivory background (used for the
+// apple-touch-icon and the manifest's 192/512 "any" purpose icons). Must be
+// fully opaque — iOS fills any transparent apple-touch-icon pixels with
+// black, which would put the home-screen icon on a black square.
 function iconSvg(size) {
   const r = size * 0.46;
   const c = size / 2;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
   <defs>${gradientDefs('g')}</defs>
+  <rect width="${size}" height="${size}" fill="#FBF6EF"/>
   <circle cx="${c}" cy="${c}" r="${r}" fill="url(#g)"/>
 </svg>`;
 }
@@ -52,6 +55,10 @@ function maskableSvg(size) {
 async function render(svg, size, filename) {
   await sharp(Buffer.from(svg), { density: 384 })
     .resize(size, size)
+    // Belt-and-suspenders: the SVG is already fully opaque, but flatten()
+    // guarantees no stray alpha survives rasterization (anti-aliased edges,
+    // color-management, etc.) — the PNG is provably opaque, not just visually.
+    .flatten({ background: '#FBF6EF' })
     .png()
     .toFile(path.join(outDir, filename));
   console.log('wrote', filename);
