@@ -112,18 +112,26 @@ const SCREEN_COLOR_SPECS: Record<ChromeScreen, ScreenColorSpec> = {
   login: { fg: { r: 250, g: 248, b: 250, a: 1 }, bg: '#faf8fa' },
 };
 
-// Every dark, full-bleed overlay (SearchOverlay, PatientContextOverlay
-// ['settings'], AppSettingsOverlay ['appSettings'], FlowOverlay, RecordOverlay,
-// MenuDrawer) renders its `rgba(23,23,27,0.5-0.62)` backdrop across the
+// Task W5.9: the menu drawer is the one overlay that is NOT a dark backdrop.
+// It is a light ivory panel occupying ~86% of the column from the right edge
+// (the remaining ~14% is the dimmed app peek), and what sits under the status
+// bar while it is open is the soft dawn glow at the panel's top corner. Same
+// method as SCREEN_COLOR_SPECS above — the glow's peak stop, at its own alpha,
+// over the panel's flat ivory base (MenuDrawer.tsx PANEL_BG).
+const MENU_SPEC: ScreenColorSpec = { fg: { r: 107, g: 113, b: 246, a: 0.2 }, bg: '#fbf6ef' };
+
+// Every other dark, full-bleed overlay (SearchOverlay, PatientContextOverlay
+// ['settings'], AppSettingsOverlay ['appSettings'], FlowOverlay, RecordOverlay)
+// renders its `rgba(23,23,27,0.5-0.62)` backdrop across the
 // ENTIRE viewport (position:absolute; inset:0) with its actual card/panel
 // content positioned lower down (top:120-150px) — so at y=0, under the
 // status bar, what's showing is always that dark backdrop over whatever
 // screen sits behind it. The exact backdrop alpha varies slightly per
-// overlay (0.45 for the menu, 0.55 for most, 0.62 for RecordOverlay) and the
-// screen behind it varies too — per the spec, a single flat approximation
+// overlay and the screen behind it varies too — per the spec, a single flat approximation
 // stands in for all of them rather than a combinatorial per-overlay,
 // per-screen table. Derivation: rgba(23,23,27,0.55) blended over a
 // mid-tone screen backdrop rounds to roughly this — dark, faintly cool grey.
+// (0.55 for most, 0.62 for RecordOverlay.)
 const OVERLAY_DARK = '#4a4a52';
 
 // VoiceOverlay.tsx backdropStyle: a radial-gradient centered at (50%, 106%)
@@ -138,6 +146,7 @@ const VOICE_DARK = '#0c0c0e';
 /** Computes the top-of-viewport color for a given (screen, overlay) pair — pure, no DOM access. */
 export function computeChromeColor(screen: ChromeScreen, overlay: Overlay | null): string {
   if (overlay === 'voice') return VOICE_DARK;
+  if (overlay === 'menu') return blendOver(MENU_SPEC.fg, MENU_SPEC.bg);
   if (overlay) return OVERLAY_DARK;
   const spec = SCREEN_COLOR_SPECS[screen];
   return blendOver(spec.fg, spec.bg);

@@ -9,7 +9,7 @@ import PatientChat from '@/screens/PatientChat';
 import DraftEditor from '@/screens/DraftEditor';
 import SearchOverlay from '@/overlays/SearchOverlay';
 import PatientContextOverlay from '@/overlays/PatientContextOverlay';
-import MenuDrawer from '@/overlays/MenuDrawer';
+import MenuDrawer, { DRAWER_WIDTH_PCT } from '@/overlays/MenuDrawer';
 import AppSettingsOverlay from '@/overlays/AppSettingsOverlay';
 import FlowOverlay from '@/overlays/FlowOverlay';
 import RecordOverlay from '@/overlays/RecordOverlay';
@@ -54,6 +54,38 @@ const homeIndicatorStyle: CSSProperties = {
   zIndex: 7,
 };
 
+// Task W5.9 — the ChatGPT-style "app peek" push effect. Everything the app
+// renders (screens, toast, the other overlays, the ChatBar) lives inside this
+// one layer so it can be slid aside as a single card when the menu drawer
+// opens; the drawer itself is the only sibling, and sits above it (zIndex 20)
+// so its scrim dims the peeking app while its own opaque panel does not.
+//
+// RTL mirror of ChatGPT: the drawer enters from the RIGHT, so the app travels
+// LEFT by exactly the drawer's width — its right edge lands flush against the
+// drawer's left edge, leaving the remaining ~14% of the column visible as the
+// peek. The large radius (clipped by overflow:hidden) is what turns the app
+// into a card; the shadow that separates it from the drawer is cast by the
+// drawer panel itself.
+//
+// zIndex here is what guarantees this is a stacking context in BOTH states, so
+// the screens' own zIndex values (0-20) stay contained even while `transform`
+// is 'none' — and leaving it at 'none' when closed keeps the layer out of the
+// way of descendants' containing blocks and backdrop-filters entirely.
+// The background makes the card opaque no matter which screen is inside, so
+// the drawer can never show through from underneath.
+const pushLayerStyle = (pushed: boolean): CSSProperties => ({
+  position: 'absolute',
+  inset: 0,
+  zIndex: 15,
+  overflow: 'hidden',
+  background: 'var(--bg-warm)',
+  borderRadius: pushed ? 30 : 0,
+  transform: pushed ? `translateX(-${DRAWER_WIDTH_PCT}%)` : 'none',
+  // Same duration/curve as the drawer panel's own slide, so the two read as
+  // one gesture (matches the drSlideIn keyframe it is coordinated with).
+  transition: 'transform 0.28s ease, border-radius 0.28s ease',
+});
+
 const placeholderWrapStyle: CSSProperties = {
   position: 'absolute',
   inset: 0,
@@ -96,6 +128,9 @@ function AuthedApp({ user }: { user: User }) {
   const state = useAppState();
 
   const showChatBar = state.screen !== 'draft';
+  // Drives both halves of the drawer gesture: the panel's slide-in and the
+  // app content layer's slide-aside (see pushLayerStyle above).
+  const menuOpen = state.overlay === 'menu';
 
   // Wave 4 Issue A: keeps the document background + <meta name="theme-color">
   // in sync with whatever's actually at the top of the current screen/overlay,
@@ -107,184 +142,186 @@ function AuthedApp({ user }: { user: User }) {
 
   return (
     <AppFrame>
-      {/* Wave 4 Issue B: keyed on `screen` alone (not overlay/toast/chat
-          state) so switching screens fades in instead of hard-swapping,
-          while unrelated state updates (a new chat message, the toast
-          popping up, chatThinking toggling) re-render this same div in
-          place — no key change, no remount, no re-triggered animation. */}
-      <div key={state.screen} style={{ animation: 'drFade 0.18s ease' }}>
-        {state.screen === 'home' ? (
-          <Home
-            homeOrb={state.homeOrb}
-            onSearch={() => state.open('search')}
-            onRecord={() => state.open('record')}
-            onMenu={() => state.open('menu')}
-            onOrbClick={() => state.open('voice')}
+      <div style={pushLayerStyle(menuOpen)}>
+        {/* Wave 4 Issue B: keyed on `screen` alone (not overlay/toast/chat
+            state) so switching screens fades in instead of hard-swapping,
+            while unrelated state updates (a new chat message, the toast
+            popping up, chatThinking toggling) re-render this same div in
+            place — no key change, no remount, no re-triggered animation. */}
+        <div key={state.screen} style={{ animation: 'drFade 0.18s ease' }}>
+          {state.screen === 'home' ? (
+            <Home
+              homeOrb={state.homeOrb}
+              onSearch={() => state.open('search')}
+              onRecord={() => state.open('record')}
+              onMenu={() => state.open('menu')}
+              onOrbClick={() => state.open('voice')}
+            />
+          ) : state.screen === 'profile' && state.activePatient ? (
+            <Profile
+              patient={state.activePatient}
+              sessionCount={state.activeSessionCount}
+              onOpenSettings={() => state.open('settings')}
+              onGoHome={() => state.go('home')}
+              onOpenFlow={(type) => state.openFlow(type)}
+              onGoWorld={() => state.go('world')}
+            />
+          ) : state.screen === 'world' && state.activePatient ? (
+            <World
+              patient={state.activePatient}
+              sessionCount={state.activeSessionCount}
+              entries={state.entries}
+              onGoProfile={() => state.go('profile')}
+              onOpenEntry={(entry) => {
+                state.setDraft(
+                  {
+                    id: entry.id,
+                    type: entry.type === 'doc' ? 'doc' : 'summary',
+                    patientId: state.activePatient!.id,
+                    date: entry.entry_date,
+                    title: entry.title,
+                    body: entry.type === 'rec' ? entry.transcript || entry.body : entry.body,
+                  },
+                  'world'
+                );
+                state.go('draft');
+              }}
+            />
+          ) : state.screen === 'chat' ? (
+            <PatientChat
+              title={
+                state.activeChat.patientId && state.activePatient
+                  ? `שיחה על ${fullName(state.activePatient)}`
+                  : 'שיחה עם דרור'
+              }
+              messages={state.activeChat.messages}
+              thinking={state.chatThinking}
+              onBack={state.leaveChat}
+            />
+          ) : state.screen === 'draft' && state.draft ? (
+            <DraftEditor
+              draft={state.draft}
+              draftFrom={state.draftFrom}
+              onBodyChange={(body) => state.setDraft((d) => (d ? { ...d, body } : d))}
+              onClose={() => state.closeDraft()}
+              onSave={(asDraft) => state.saveDraft(asDraft)}
+            />
+          ) : (
+            <ScreenPlaceholder onHome={() => state.go('home')} />
+          )}
+        </div>
+
+        {state.toast && <Toast text={state.toast} />}
+
+        {state.overlay === 'search' && (
+          <SearchOverlay
+            patients={state.patients}
+            onClose={() => state.close()}
+            onOpenPatient={async (id) => {
+              await state.refreshPatients();
+              await state.openPatient(id);
+              state.close();
+            }}
+            showToast={state.showToast}
           />
-        ) : state.screen === 'profile' && state.activePatient ? (
-          <Profile
+        )}
+
+        {state.overlay === 'settings' && state.activePatient && (
+          <PatientContextOverlay
+            patient={state.activePatient}
+            onClose={() => state.close()}
+            onSaved={async () => {
+              await state.refreshPatients();
+              state.close();
+            }}
+            showToast={state.showToast}
+          />
+        )}
+
+        {state.overlay === 'appSettings' && <AppSettingsOverlay user={user} onClose={() => state.close()} />}
+
+        {state.overlay === 'flow' && state.activePatient && (
+          <FlowOverlay
+            flowType={state.flowType}
             patient={state.activePatient}
             sessionCount={state.activeSessionCount}
-            onOpenSettings={() => state.open('settings')}
-            onGoHome={() => state.go('home')}
-            onOpenFlow={(type) => state.openFlow(type)}
-            onGoWorld={() => state.go('world')}
-          />
-        ) : state.screen === 'world' && state.activePatient ? (
-          <World
-            patient={state.activePatient}
-            sessionCount={state.activeSessionCount}
-            entries={state.entries}
-            onGoProfile={() => state.go('profile')}
-            onOpenEntry={(entry) => {
-              state.setDraft(
-                {
-                  id: entry.id,
-                  type: entry.type === 'doc' ? 'doc' : 'summary',
-                  patientId: state.activePatient!.id,
-                  date: entry.entry_date,
-                  title: entry.title,
-                  body: entry.type === 'rec' ? entry.transcript || entry.body : entry.body,
-                },
-                'world'
-              );
+            onClose={() => state.close()}
+            onDraftReady={({ title, body }) => {
+              state.setDraft({
+                id: null,
+                type: state.flowType,
+                patientId: state.activePatient!.id,
+                date: new Date().toISOString(),
+                title,
+                body,
+              });
+              state.close();
               state.go('draft');
             }}
+            showToast={state.showToast}
           />
-        ) : state.screen === 'chat' ? (
-          <PatientChat
-            title={
-              state.activeChat.patientId && state.activePatient
-                ? `שיחה על ${fullName(state.activePatient)}`
-                : 'שיחה עם דרור'
-            }
-            messages={state.activeChat.messages}
-            thinking={state.chatThinking}
-            onBack={state.leaveChat}
-          />
-        ) : state.screen === 'draft' && state.draft ? (
-          <DraftEditor
-            draft={state.draft}
-            draftFrom={state.draftFrom}
-            onBodyChange={(body) => state.setDraft((d) => (d ? { ...d, body } : d))}
-            onClose={() => state.closeDraft()}
-            onSave={(asDraft) => state.saveDraft(asDraft)}
-          />
-        ) : (
-          <ScreenPlaceholder onHome={() => state.go('home')} />
         )}
+
+        {state.overlay === 'record' && (
+          <RecordOverlay
+            patients={state.patients}
+            onClose={() => state.close()}
+            refreshPatients={state.refreshPatients}
+            openPatient={state.openPatient}
+            setDraft={state.setDraft}
+            goDraft={() => state.go('draft')}
+            showToast={state.showToast}
+          />
+        )}
+
+        {state.overlay === 'voice' && (
+          <VoiceOverlay
+            patientId={undefined}
+            onClose={() => {
+              // Mirrors the design mock's goHomeClose (line 726) — voice is
+              // only ever opened from Home this week, so closing it always
+              // returns there.
+              state.go('home');
+              state.close();
+            }}
+          />
+        )}
+
+        {showChatBar && (
+          <ChatBar
+            screen={state.screen}
+            activePatientName={state.activePatient ? fullName(state.activePatient) : null}
+            onOpenRecord={() => state.open('record')}
+            onSend={state.sendChat}
+            disabled={state.chatThinking}
+          />
+        )}
+
+        <div dir="ltr" className="preview-only" style={taglineStyle}>
+          The first AI assistant for Israeli psychologists.
+        </div>
+        <div className="preview-only" style={homeIndicatorStyle} />
       </div>
 
-      {state.toast && <Toast text={state.toast} />}
-
-      {state.overlay === 'search' && (
-        <SearchOverlay
-          patients={state.patients}
-          onClose={() => state.close()}
-          onOpenPatient={async (id) => {
-            await state.refreshPatients();
-            await state.openPatient(id);
-            state.close();
-          }}
-          showToast={state.showToast}
-        />
-      )}
-
-      {state.overlay === 'settings' && state.activePatient && (
-        <PatientContextOverlay
-          patient={state.activePatient}
-          onClose={() => state.close()}
-          onSaved={async () => {
-            await state.refreshPatients();
-            state.close();
-          }}
-          showToast={state.showToast}
-        />
-      )}
-
-      {state.overlay === 'menu' && (
-        <MenuDrawer
-          user={user}
-          chats={state.chats}
-          patients={state.patients}
-          onClose={() => state.close()}
-          onRefreshChats={state.refreshChats}
-          onNewChat={() => {
-            state.close();
-            state.newChat();
-          }}
-          onOpenSearch={() => state.open('search')}
-          onOpenChat={(chat) => {
-            state.close();
-            state.openChat(chat);
-          }}
-          onOpenSettings={() => state.open('appSettings')}
-        />
-      )}
-
-      {state.overlay === 'appSettings' && <AppSettingsOverlay user={user} onClose={() => state.close()} />}
-
-      {state.overlay === 'flow' && state.activePatient && (
-        <FlowOverlay
-          flowType={state.flowType}
-          patient={state.activePatient}
-          sessionCount={state.activeSessionCount}
-          onClose={() => state.close()}
-          onDraftReady={({ title, body }) => {
-            state.setDraft({
-              id: null,
-              type: state.flowType,
-              patientId: state.activePatient!.id,
-              date: new Date().toISOString(),
-              title,
-              body,
-            });
-            state.close();
-            state.go('draft');
-          }}
-          showToast={state.showToast}
-        />
-      )}
-
-      {state.overlay === 'record' && (
-        <RecordOverlay
-          patients={state.patients}
-          onClose={() => state.close()}
-          refreshPatients={state.refreshPatients}
-          openPatient={state.openPatient}
-          setDraft={state.setDraft}
-          goDraft={() => state.go('draft')}
-          showToast={state.showToast}
-        />
-      )}
-
-      {state.overlay === 'voice' && (
-        <VoiceOverlay
-          patientId={undefined}
-          onClose={() => {
-            // Mirrors the design mock's goHomeClose (line 726) — voice is
-            // only ever opened from Home this week, so closing it always
-            // returns there.
-            state.go('home');
-            state.close();
-          }}
-        />
-      )}
-
-      {showChatBar && (
-        <ChatBar
-          screen={state.screen}
-          activePatientName={state.activePatient ? fullName(state.activePatient) : null}
-          onOpenRecord={() => state.open('record')}
-          onSend={state.sendChat}
-          disabled={state.chatThinking}
-        />
-      )}
-
-      <div dir="ltr" className="preview-only" style={taglineStyle}>
-        The first AI assistant for Israeli psychologists.
-      </div>
-      <div className="preview-only" style={homeIndicatorStyle} />
+      {/* Outside the push layer, and the only thing above it: the drawer is
+          the surface the app slides aside to reveal. It stays mounted so the
+          panel can animate BOTH ways in step with the push (see MenuDrawer). */}
+      <MenuDrawer
+        open={menuOpen}
+        chats={state.chats}
+        onClose={() => state.close()}
+        onRefreshChats={state.refreshChats}
+        onNewChat={() => {
+          state.close();
+          state.newChat();
+        }}
+        onOpenSearch={() => state.open('search')}
+        onOpenChat={(chat) => {
+          state.close();
+          state.openChat(chat);
+        }}
+        onOpenSettings={() => state.open('appSettings')}
+      />
     </AppFrame>
   );
 }

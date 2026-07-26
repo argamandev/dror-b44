@@ -39,8 +39,7 @@ describe('computeChromeColor', () => {
     expect(computeChromeColor('login', null)).toBe('#faf8fa');
   });
 
-  it('any non-voice overlay open (menu, search, record, flow, settings) uses the dark backdrop tone', () => {
-    expect(computeChromeColor('home', 'menu')).toBe('#4a4a52');
+  it('the dark-backdrop overlays (search, record, flow, settings) use the dark tone', () => {
     expect(computeChromeColor('profile', 'search')).toBe('#4a4a52');
     expect(computeChromeColor('profile', 'settings')).toBe('#4a4a52');
     expect(computeChromeColor('home', 'appSettings')).toBe('#4a4a52');
@@ -50,5 +49,13 @@ describe('computeChromeColor', () => {
 
   it('the voice overlay uses its own near-black tone regardless of screen', () => {
     expect(computeChromeColor('home', 'voice')).toBe('#0c0c0e');
+  });
+
+  it('the menu drawer (W5.9) is light — its ivory panel under the dawn glow, not the dark tone', () => {
+    // R: 107*0.2 + 251*0.8 = 222.2 -> 222 -> 0xde
+    // G: 113*0.2 + 246*0.8 = 219.4 -> 219 -> 0xdb
+    // B: 246*0.2 + 239*0.8 = 240.4 -> 240 -> 0xf0
+    expect(computeChromeColor('home', 'menu')).toBe('#dedbf0');
+    expect(computeChromeColor('chat', 'menu')).toBe('#dedbf0');
   });
 });
