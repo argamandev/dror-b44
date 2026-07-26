@@ -97,12 +97,12 @@ export default function ChatBar({ screen, activePatientName, onOpenRecord, onSen
       />
       <div dir="ltr" style={rowStyle}>
         <div style={leftIconsStyle}>
-          <div onClick={onOpenRecord} title="הוספה" style={iconBtn}>
+          <div onClick={onOpenRecord} title="הוספה" className="pressable" style={iconBtn}>
             <svg viewBox="0 0 24 24" fill="none" width={24} height={24}>
               <path d="M12 5v14M5 12h14" stroke="#17171b" strokeWidth={2} strokeLinecap="round" />
             </svg>
           </div>
-          <div onClick={onOpenRecord} title="הקלטה" style={iconBtn}>
+          <div onClick={onOpenRecord} title="הקלטה" className="pressable" style={iconBtn}>
             <svg viewBox="0 0 24 24" fill="none" width={24} height={24}>
               <rect x={8} y={2} width={8} height={13} rx={4} stroke="#17171b" strokeWidth={2} />
               <path d="M5 11a7 7 0 0014 0" stroke="#17171b" strokeWidth={2} strokeLinecap="round" />
@@ -114,6 +114,7 @@ export default function ChatBar({ screen, activePatientName, onOpenRecord, onSen
           onClick={disabled ? undefined : handleSend}
           title="שליחה"
           aria-disabled={disabled}
+          className="pressable"
           style={disabled ? sendBtnDisabled : sendBtn}
         >
           <svg viewBox="0 0 24 24" fill="none" width={18} height={18}>

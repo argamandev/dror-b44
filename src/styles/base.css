@@ -3,10 +3,25 @@
 
 html,body,#root{height:100%}
 
-/* Native app shell (Task N1): no rubber-band scroll past the column, and the
-   page background matches the app's warm bg so standalone mode never shows
-   white beyond the centered column. */
-html{
+/* Native app shell (Task N1 + Wave 4 Issue A): the document itself never
+   scrolls or rubber-bands. iOS Safari ignores overscroll-behavior on the
+   page, so a finger-drag past the top/bottom of a scrollable document
+   reveals whatever's behind it — here, html's flat --bg-warm — as a light
+   band above/below the app's own gradients (the founder's reported bug).
+   Pinning html/body to the viewport with position:fixed + overflow:hidden
+   removes the document as a scrollable surface entirely, so there is
+   nothing left to rubber-band. All real scrolling now happens exclusively
+   in inner overflow containers (World's entry list, the chat message list,
+   the menu drawer body, search/record result lists — see .scroll-touch
+   below and each component's own overflowY:auto container) plus Login's
+   own full-viewport scroll wrapper, none of which touch the document.
+*/
+html,body{
+  position:fixed;
+  inset:0;
+  overflow:hidden;
+  width:100%;
+  height:100%;
   overscroll-behavior:none;
   background:var(--bg-warm);
 }
@@ -20,14 +35,12 @@ html,body{
 
 body{
   margin:0;
-  min-height:100dvh;
   font-family:var(--font-sans);
   color:var(--text);
-  background:var(--bg-warm);
-  overscroll-behavior:none;
   padding-top:env(safe-area-inset-top);
   padding-bottom:env(safe-area-inset-bottom);
   -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
   /* App chrome (labels, buttons, icons) isn't selectable — feels native.
      Re-enabled below for inputs/textareas and anything explicitly marked
      data-selectable (chat message text, draft title/date). */
@@ -49,6 +62,20 @@ input::placeholder,textarea::placeholder{color:var(--faint)}
 input,textarea,button{font-family:var(--font-sans)}
 
 ::-webkit-scrollbar{width:0;height:0}
+
+/* Wave 4 Issue B: Apple-application press feedback. Applied alongside
+   components' existing inline styles (className="pressable") on every
+   tappable control — pills, icon buttons, cards, rows — so taps read as a
+   physical press instead of an inert click. */
+.pressable{transition:transform 0.15s ease, opacity 0.15s ease}
+.pressable:active{transform:scale(0.965);opacity:0.85}
+
+/* Wave 4 Issue B: momentum scrolling for iOS's inner overflow containers
+   (World's entry list, the chat message list, the menu drawer body,
+   search/record result lists, Login's own scroll wrapper) — WITHOUT this,
+   iOS Safari can render a janky, non-momentum scroll inside nested
+   overflow:auto elements. */
+.scroll-touch{-webkit-overflow-scrolling:touch}
 
 @keyframes drFade{from{opacity:0}to{opacity:1}}
 @keyframes drRise{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:translateY(0)}}

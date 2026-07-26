@@ -34,17 +34,33 @@ interface SpeechRecognitionLike extends EventTarget {
 }
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
 
-// Errors that mean retrying won't help (permission denied / no mic at all) —
-// restarting on these would spin in a tight start/error/end loop forever.
-// A transient 'no-speech' (Chrome's silence timeout — the exact case the
-// auto-restart exists for) is deliberately NOT in this set.
+// Errors that mean retrying won't help (permission denied / no mic at all /
+// recognition service unavailable) — restarting on these would spin in a
+// tight start/error/end loop forever. A transient 'no-speech' (Chrome's
+// silence timeout — the exact case the auto-restart exists for) is
+// deliberately NOT in this set.
 const FATAL_RECOGNITION_ERRORS = new Set(['not-allowed', 'service-not-allowed', 'audio-capture']);
 
-// Subset of the fatal errors above that specifically mean "no mic access" —
-// surfaced to the UI via `micError` so a denied/unavailable mic (including a
-// mid-session disconnect, 'audio-capture') shows a visible notice instead of
-// a fake "listening" state.
-const MIC_ACCESS_RECOGNITION_ERRORS = new Set(['not-allowed', 'service-not-allowed', 'audio-capture']);
+// Wave 4 Issue C: these two used to be the SAME set ('micError' fired for
+// all three), which wrongly told the user recording itself was blocked when
+// only live transcription had failed — iOS Safari's webkitSpeechRecognition
+// fires 'service-not-allowed' whenever Siri/Dictation is unavailable, even
+// though getUserMedia succeeded and MediaRecorder is capturing audio just
+// fine. Split into two disjoint sets so the two failure modes get two
+// different (and differently-handled) states:
+
+// Real mic-ACCESS failures — the mic itself is denied or gone, so recording
+// genuinely cannot continue.
+const MIC_ACCESS_RECOGNITION_ERRORS = new Set(['not-allowed', 'audio-capture']);
+
+// The transcription SERVICE failed while the mic is fine — recording (the
+// MediaRecorder + timer) keeps running with an empty transcript.
+const TRANSCRIPT_UNAVAILABLE_RECOGNITION_ERRORS = new Set(['service-not-allowed']);
+
+// Wave 4 Issue C: shown by FlowOverlay/RecordOverlay under the timer when
+// `transcriptUnavailable` is true and recording is still running.
+export const TRANSCRIPT_UNAVAILABLE_NOTICE =
+  'תמלול חי אינו זמין במכשיר הזה — ההקלטה נמשכת, ואפשר גם לכתוב נקודות במקום';
 
 declare global {
   interface Window {
@@ -61,7 +77,10 @@ export interface SessionRecorder {
   running: boolean;
   transcript: string;
   supported: boolean;
+  /** Real mic-access failure (getUserMedia rejection, 'not-allowed'/'audio-capture') — recording cannot run. */
   micError: boolean;
+  /** The transcription service failed (or isn't supported) while the mic itself is fine — recording continues, transcript stays empty. */
+  transcriptUnavailable: boolean;
   start(): Promise<void>;
   pause(): void;
   resume(): void;
@@ -90,6 +109,7 @@ export function useSessionRecorder(): SessionRecorder {
   const [running, setRunning] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [micError, setMicError] = useState(false);
+  const [transcriptUnavailable, setTranscriptUnavailable] = useState(false);
 
   const secondsRef = useRef(0);
   const transcriptRef = useRef('');
@@ -136,16 +156,21 @@ export function useSessionRecorder(): SessionRecorder {
     };
     rec.onerror = (ev) => {
       // A transient 'no-speech' (Chrome's silence timeout) is exactly the
-      // case onend's auto-restart below exists for — only permission/device
-      // errors stop the retry loop, since those won't fix themselves.
+      // case onend's auto-restart below exists for — only permission/device/
+      // service errors stop the retry loop, since those won't fix themselves.
       if (FATAL_RECOGNITION_ERRORS.has(ev.error)) fatalErrorRef.current = true;
       // A mic-access error can arrive asynchronously, after start() already
       // resolved with running=true — surface it as a visible failure state
-      // instead of leaving a fake "listening" UI ticking away.
+      // instead of leaving a fake "listening" UI ticking away, and stop the
+      // recording outright (there is no audio to keep capturing).
       if (MIC_ACCESS_RECOGNITION_ERRORS.has(ev.error)) {
         setMicError(true);
         stopTimer();
         setRunning(false);
+      } else if (TRANSCRIPT_UNAVAILABLE_RECOGNITION_ERRORS.has(ev.error)) {
+        // The mic/MediaRecorder are unaffected — recording keeps running,
+        // just without a live transcript.
+        setTranscriptUnavailable(true);
       }
     };
     rec.onend = () => {
@@ -153,7 +178,10 @@ export function useSessionRecorder(): SessionRecorder {
         try {
           rec.start();
         } catch {
-          /* already running / transient — the next onend retries */
+          // iOS can throw here in edge states (e.g. Dictation just got
+          // disabled) — the mic/recording are unaffected, only live
+          // transcription is lost; never surface this as micError.
+          setTranscriptUnavailable(true);
         }
       }
     };
@@ -186,6 +214,7 @@ export function useSessionRecorder(): SessionRecorder {
     setSeconds(0);
     setTranscript('');
     setMicError(false);
+    setTranscriptUnavailable(false);
   }, []);
 
   const start = useCallback(async () => {
@@ -214,13 +243,23 @@ export function useSessionRecorder(): SessionRecorder {
 
     if (supported) {
       wantRecognitionRef.current = true;
-      const rec = createRecognition();
-      recognitionRef.current = rec;
+      // iOS Safari can throw constructing/starting SpeechRecognition in edge
+      // states (e.g. Siri/Dictation disabled) — the mic/MediaRecorder above
+      // are already running and unaffected, so this must never become
+      // micError: only live transcription is unavailable.
       try {
+        const rec = createRecognition();
+        recognitionRef.current = rec;
         rec?.start();
       } catch {
-        /* ignore */
+        wantRecognitionRef.current = false;
+        recognitionRef.current = null;
+        setTranscriptUnavailable(true);
       }
+    } else {
+      // No SpeechRecognition API at all — recording still proceeds via
+      // MediaRecorder alone, just without a live transcript.
+      setTranscriptUnavailable(true);
     }
 
     startTimer();
@@ -242,13 +281,17 @@ export function useSessionRecorder(): SessionRecorder {
     if (supported) {
       wantRecognitionRef.current = true;
       fatalErrorRef.current = false;
-      const rec = createRecognition();
-      recognitionRef.current = rec;
       try {
+        const rec = createRecognition();
+        recognitionRef.current = rec;
         rec?.start();
       } catch {
-        /* ignore */
+        wantRecognitionRef.current = false;
+        recognitionRef.current = null;
+        setTranscriptUnavailable(true);
       }
+    } else {
+      setTranscriptUnavailable(true);
     }
     try {
       recorderRef.current?.resume();
@@ -290,5 +333,17 @@ export function useSessionRecorder(): SessionRecorder {
     };
   }, [stopRecognition, stopTimer]);
 
-  return { seconds, running, transcript, supported, micError, start, pause, resume, stop, reset };
+  return {
+    seconds,
+    running,
+    transcript,
+    supported,
+    micError,
+    transcriptUnavailable,
+    start,
+    pause,
+    resume,
+    stop,
+    reset,
+  };
 }

@@ -18,6 +18,7 @@ import AppFrame from '@/components/AppFrame';
 import ChatBar from '@/components/ChatBar';
 import Toast from '@/components/Toast';
 import { useAppState } from '@/state/useAppState';
+import { setChromeColor } from '@/ui/chromeColor';
 
 type User = { email: string; full_name?: string };
 
@@ -90,68 +91,83 @@ function AuthedApp({ user }: { user: User }) {
 
   const showChatBar = state.screen !== 'draft';
 
+  // Wave 4 Issue A: keeps the document background + <meta name="theme-color">
+  // in sync with whatever's actually at the top of the current screen/overlay,
+  // so the iOS status bar (and any residual sliver around the app frame)
+  // never shows a mismatched flat color.
+  useEffect(() => {
+    setChromeColor(state.screen, state.overlay);
+  }, [state.screen, state.overlay]);
+
   return (
     <AppFrame>
-      {state.screen === 'home' ? (
-        <Home
-          homeOrb={state.homeOrb}
-          onSearch={() => state.open('search')}
-          onRecord={() => state.open('record')}
-          onMenu={() => state.open('menu')}
-          onOrbClick={() => state.open('voice')}
-        />
-      ) : state.screen === 'profile' && state.activePatient ? (
-        <Profile
-          patient={state.activePatient}
-          sessionCount={state.activeSessionCount}
-          onOpenSettings={() => state.open('settings')}
-          onGoHome={() => state.go('home')}
-          onOpenFlow={(type) => state.openFlow(type)}
-          onGoWorld={() => state.go('world')}
-        />
-      ) : state.screen === 'world' && state.activePatient ? (
-        <World
-          patient={state.activePatient}
-          sessionCount={state.activeSessionCount}
-          entries={state.entries}
-          onGoProfile={() => state.go('profile')}
-          onOpenEntry={(entry) => {
-            state.setDraft(
-              {
-                id: entry.id,
-                type: entry.type === 'doc' ? 'doc' : 'summary',
-                patientId: state.activePatient!.id,
-                date: entry.entry_date,
-                title: entry.title,
-                body: entry.type === 'rec' ? entry.transcript || entry.body : entry.body,
-              },
-              'world'
-            );
-            state.go('draft');
-          }}
-        />
-      ) : state.screen === 'chat' ? (
-        <PatientChat
-          title={
-            state.activeChat.patientId && state.activePatient
-              ? `שיחה על ${fullName(state.activePatient)}`
-              : 'שיחה עם דרור'
-          }
-          messages={state.activeChat.messages}
-          thinking={state.chatThinking}
-          onBack={state.leaveChat}
-        />
-      ) : state.screen === 'draft' && state.draft ? (
-        <DraftEditor
-          draft={state.draft}
-          draftFrom={state.draftFrom}
-          onBodyChange={(body) => state.setDraft((d) => (d ? { ...d, body } : d))}
-          onClose={() => state.closeDraft()}
-          onSave={(asDraft) => state.saveDraft(asDraft)}
-        />
-      ) : (
-        <ScreenPlaceholder onHome={() => state.go('home')} />
-      )}
+      {/* Wave 4 Issue B: keyed on `screen` alone (not overlay/toast/chat
+          state) so switching screens fades in instead of hard-swapping,
+          while unrelated state updates (a new chat message, the toast
+          popping up, chatThinking toggling) re-render this same div in
+          place — no key change, no remount, no re-triggered animation. */}
+      <div key={state.screen} style={{ animation: 'drFade 0.18s ease' }}>
+        {state.screen === 'home' ? (
+          <Home
+            homeOrb={state.homeOrb}
+            onSearch={() => state.open('search')}
+            onRecord={() => state.open('record')}
+            onMenu={() => state.open('menu')}
+            onOrbClick={() => state.open('voice')}
+          />
+        ) : state.screen === 'profile' && state.activePatient ? (
+          <Profile
+            patient={state.activePatient}
+            sessionCount={state.activeSessionCount}
+            onOpenSettings={() => state.open('settings')}
+            onGoHome={() => state.go('home')}
+            onOpenFlow={(type) => state.openFlow(type)}
+            onGoWorld={() => state.go('world')}
+          />
+        ) : state.screen === 'world' && state.activePatient ? (
+          <World
+            patient={state.activePatient}
+            sessionCount={state.activeSessionCount}
+            entries={state.entries}
+            onGoProfile={() => state.go('profile')}
+            onOpenEntry={(entry) => {
+              state.setDraft(
+                {
+                  id: entry.id,
+                  type: entry.type === 'doc' ? 'doc' : 'summary',
+                  patientId: state.activePatient!.id,
+                  date: entry.entry_date,
+                  title: entry.title,
+                  body: entry.type === 'rec' ? entry.transcript || entry.body : entry.body,
+                },
+                'world'
+              );
+              state.go('draft');
+            }}
+          />
+        ) : state.screen === 'chat' ? (
+          <PatientChat
+            title={
+              state.activeChat.patientId && state.activePatient
+                ? `שיחה על ${fullName(state.activePatient)}`
+                : 'שיחה עם דרור'
+            }
+            messages={state.activeChat.messages}
+            thinking={state.chatThinking}
+            onBack={state.leaveChat}
+          />
+        ) : state.screen === 'draft' && state.draft ? (
+          <DraftEditor
+            draft={state.draft}
+            draftFrom={state.draftFrom}
+            onBodyChange={(body) => state.setDraft((d) => (d ? { ...d, body } : d))}
+            onClose={() => state.closeDraft()}
+            onSave={(asDraft) => state.saveDraft(asDraft)}
+          />
+        ) : (
+          <ScreenPlaceholder onHome={() => state.go('home')} />
+        )}
+      </div>
 
       {state.toast && <Toast text={state.toast} />}
 
@@ -286,6 +302,13 @@ export default function App() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Wave 4 Issue A: pre-auth (loading spinner or Login) is always the flat
+  // warm background — AuthedApp's own effect takes over the moment `user`
+  // is set and it mounts.
+  useEffect(() => {
+    if (!user) setChromeColor('login', null);
+  }, [user]);
 
   if (loading) {
     return (

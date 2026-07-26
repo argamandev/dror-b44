@@ -24,6 +24,12 @@ interface VoiceOverlayProps {
 
 const UNSUPPORTED_CAPTION = 'שיחה קולית נתמכת בכרום בלבד כרגע';
 const MIC_ERROR_CAPTION = 'אין גישה למיקרופון — אפשר לאשר גישה בדפדפן';
+// Wave 4 Issue C: iOS Safari fires 'service-not-allowed' when Siri/Dictation
+// is unavailable even though mic permission is granted — a distinct message
+// from MIC_ERROR_CAPTION, since the fix (and the user's mental model) is
+// completely different: this isn't a permission problem.
+const SPEECH_UNAVAILABLE_CAPTION =
+  'זיהוי דיבור אינו זמין במכשיר הזה — באייפון ודאו שההכתבה מופעלת (הגדרות ← כללי ← מקלדת ← הפעלת הכתבה), או כתבו לדרור בצ\'אט';
 
 const backdropStyle: CSSProperties = {
   position: 'absolute',
@@ -108,10 +114,18 @@ export default function VoiceOverlay({ patientId, onClose }: VoiceOverlayProps) 
   const orbState = voice.phase === 'listening' ? 'listening' : 'thinking';
 
   // v2 mock drops the title + rotating caption entirely — pure orb presence.
-  // Only functional notices survive: unsupported-browser / mic-permission
-  // text, and (controller resolution 4) the last-heard-user-text line.
-  const notice = !voice.supported ? UNSUPPORTED_CAPTION : voice.micError ? MIC_ERROR_CAPTION : null;
-  const showLive = voice.supported && !voice.micError && voice.lastUserText.trim().length > 0;
+  // Only functional notices survive: unsupported-browser / mic-permission /
+  // speech-service-unavailable text, and (controller resolution 4) the
+  // last-heard-user-text line.
+  const notice = !voice.supported
+    ? UNSUPPORTED_CAPTION
+    : voice.micError
+      ? MIC_ERROR_CAPTION
+      : voice.speechUnavailable
+        ? SPEECH_UNAVAILABLE_CAPTION
+        : null;
+  const showLive =
+    voice.supported && !voice.micError && !voice.speechUnavailable && voice.lastUserText.trim().length > 0;
 
   return (
     <div style={backdropStyle}>

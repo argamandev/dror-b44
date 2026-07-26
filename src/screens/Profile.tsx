@@ -163,7 +163,7 @@ export default function Profile({
         <div style={subStyle}>{sessionCount} פגישות</div>
       </div>
       <div style={actionsWrapStyle}>
-        <div onClick={() => onOpenFlow('summary')} style={actionBtnStyle}>
+        <div onClick={() => onOpenFlow('summary')} className="pressable" style={actionBtnStyle}>
           <svg viewBox="0 0 24 24" fill="none" width={22} height={22}>
             <path
               d="M4 20l1.2-4.2L16.6 4.4a2 2 0 012.9 0l0.1 0.1a2 2 0 010 2.9L8.2 18.8 4 20z"
@@ -175,7 +175,7 @@ export default function Profile({
           </svg>
           <span style={actionLabelStyle}>יצירת סיכום פגישה</span>
         </div>
-        <div onClick={() => onOpenFlow('doc')} style={actionBtnStyle}>
+        <div onClick={() => onOpenFlow('doc')} className="pressable" style={actionBtnStyle}>
           <svg viewBox="0 0 24 24" fill="none" width={22} height={22}>
             <path d="M6 2.8h8l4 4v14.4H6V2.8z" stroke="#17171b" strokeWidth={2} strokeLinejoin="round" />
             <path d="M14 2.8v4h4" stroke="#17171b" strokeWidth={2} strokeLinejoin="round" />
@@ -183,7 +183,7 @@ export default function Profile({
           </svg>
           <span style={actionLabelStyle}>יצירת מסמך רשמי</span>
         </div>
-        <div onClick={onGoWorld} style={actionBtnStyle}>
+        <div onClick={onGoWorld} className="pressable" style={actionBtnStyle}>
           <svg viewBox="0 0 24 24" fill="none" width={22} height={22}>
             <circle cx={12} cy={8} r={4} stroke="#17171b" strokeWidth={2} />
             <path

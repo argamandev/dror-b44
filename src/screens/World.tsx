@@ -161,14 +161,14 @@ export default function World({ patient, sessionCount, entries, onGoProfile, onO
       </div>
       <div style={filtersRowStyle}>
         {FILTERS.map((f) => (
-          <div key={f.v} onClick={() => setFilter(f.v)} style={pillStyle(filter === f.v)}>
+          <div key={f.v} onClick={() => setFilter(f.v)} className="pressable" style={pillStyle(filter === f.v)}>
             {f.label}
           </div>
         ))}
       </div>
-      <div style={listStyle}>
+      <div className="scroll-touch" style={listStyle}>
         {filtered.map((e) => (
-          <div key={e.id} onClick={() => onOpenEntry(e)} style={cardStyle}>
+          <div key={e.id} onClick={() => onOpenEntry(e)} className="pressable" style={cardStyle}>
             <div style={cardHeadStyle}>
               <span style={chipStyle(e.type)}>{chipLabel(e.type)}</span>
               <span dir="ltr" style={cardDateStyle}>

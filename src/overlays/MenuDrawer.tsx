@@ -221,8 +221,8 @@ export default function MenuDrawer({
             </svg>
           </div>
         </div>
-        <div style={bodyStyle}>
-          <div onClick={onNewChat} style={actionRowStyle}>
+        <div className="scroll-touch" style={bodyStyle}>
+          <div onClick={onNewChat} className="pressable" style={actionRowStyle}>
             <svg viewBox="0 0 24 24" fill="none" width={19} height={19} style={{ flex: 'none' }}>
               <path
                 d="M4 20l1.2-4.2L16.6 4.4a2 2 0 012.9 0l0.1 0.1a2 2 0 010 2.9L8.2 18.8 4 20z"
@@ -233,7 +233,7 @@ export default function MenuDrawer({
             </svg>
             <span style={actionLabelStyle}>שיחה חדשה</span>
           </div>
-          <div onClick={onOpenSearch} style={actionRowStyle}>
+          <div onClick={onOpenSearch} className="pressable" style={actionRowStyle}>
             <svg viewBox="0 0 24 24" fill="none" width={19} height={19} style={{ flex: 'none' }}>
               <circle cx={12} cy={8} r={4} stroke="#17171b" strokeWidth={2} />
               <path
@@ -254,7 +254,7 @@ export default function MenuDrawer({
             ))}
           </div>
           {visibleChats.map((c) => (
-            <div key={c.id} onClick={() => onOpenChat(c)} style={chatRowStyle}>
+            <div key={c.id} onClick={() => onOpenChat(c)} className="pressable" style={chatRowStyle}>
               <div style={chatTitleStyle}>{c.title}</div>
             </div>
           ))}

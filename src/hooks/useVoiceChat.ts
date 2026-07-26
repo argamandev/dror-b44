@@ -50,12 +50,19 @@ declare global {
 const RecognitionCtor: SpeechRecognitionCtor | undefined =
   typeof window !== 'undefined' ? window.SpeechRecognition ?? window.webkitSpeechRecognition : undefined;
 
-// Same rationale as useSessionRecorder.ts: permission/device errors won't fix
-// themselves on retry, so they stop the listen-again loop instead of spinning
-// forever. A transient 'no-speech' (Chrome's silence timeout for a
-// continuous=false utterance) is deliberately NOT in this set — it's exactly
-// the case the auto-restart exists for.
+// Same rationale as useSessionRecorder.ts: permission/device/service errors
+// won't fix themselves on retry, so they stop the listen-again loop instead
+// of spinning forever. A transient 'no-speech' (Chrome's silence timeout for
+// a continuous=false utterance) is deliberately NOT in this set — it's
+// exactly the case the auto-restart exists for.
 const FATAL_RECOGNITION_ERRORS = new Set(['not-allowed', 'service-not-allowed', 'audio-capture']);
+
+// Wave 4 Issue C: split same as useSessionRecorder.ts — 'service-not-allowed'
+// (iOS Safari when Siri/Dictation is unavailable) means the mic is FINE but
+// the recognition/transcription service isn't, so it must surface as a
+// distinct state, not the generic "mic denied" message.
+const MIC_ACCESS_RECOGNITION_ERRORS = new Set(['not-allowed', 'audio-capture']);
+const SPEECH_UNAVAILABLE_RECOGNITION_ERRORS = new Set(['service-not-allowed']);
 
 export type VoicePhase = 'listening' | 'thinking' | 'speaking';
 
@@ -72,6 +79,8 @@ export interface UseVoiceChat {
   supported: boolean;
   /** Mic permission denied/unavailable — the overlay shows its own notice and the loop stops. */
   micError: boolean;
+  /** Recognition/transcription service failed (e.g. iOS 'service-not-allowed' or a constructor throw) while the mic itself is fine. */
+  speechUnavailable: boolean;
   stop(): void;
 }
 
@@ -94,6 +103,7 @@ export function useVoiceChat({ patientId }: UseVoiceChatArgs): UseVoiceChat {
   const [phase, setPhase] = useState<VoicePhase>('listening');
   const [lastUserText, setLastUserText] = useState('');
   const [micError, setMicError] = useState(false);
+  const [speechUnavailable, setSpeechUnavailable] = useState(false);
 
   const supported = !!RecognitionCtor;
 
@@ -150,7 +160,11 @@ export function useVoiceChat({ patientId }: UseVoiceChatArgs): UseVoiceChat {
       if (FATAL_RECOGNITION_ERRORS.has(ev.error)) {
         fatal = true;
         wantListeningRef.current = false;
-        setMicError(true);
+        if (MIC_ACCESS_RECOGNITION_ERRORS.has(ev.error)) {
+          setMicError(true);
+        } else if (SPEECH_UNAVAILABLE_RECOGNITION_ERRORS.has(ev.error)) {
+          setSpeechUnavailable(true);
+        }
       }
       // Non-fatal (e.g. 'no-speech') — onend below decides whether to restart.
     };
@@ -170,13 +184,24 @@ export function useVoiceChat({ patientId }: UseVoiceChatArgs): UseVoiceChat {
     if (closedRef.current || !supported) return;
     wantListeningRef.current = true;
     setPhase('listening');
-    const rec = createRecognitionInstance();
+    // Wave 4 Issue C: iOS can throw constructing OR starting recognition in
+    // edge states (e.g. Siri/Dictation disabled) — never surface that as
+    // micError, since the mic itself was never touched.
+    let rec: SpeechRecognitionLike | null;
+    try {
+      rec = createRecognitionInstance();
+    } catch {
+      wantListeningRef.current = false;
+      setSpeechUnavailable(true);
+      return;
+    }
     if (!rec) return;
     recognitionRef.current = rec;
     try {
       rec.start();
     } catch {
-      /* transient (e.g. already-starting) — nothing to retry from here */
+      wantListeningRef.current = false;
+      setSpeechUnavailable(true);
     }
   }
 
@@ -273,6 +298,7 @@ export function useVoiceChat({ patientId }: UseVoiceChatArgs): UseVoiceChat {
     lastUserText,
     supported,
     micError,
+    speechUnavailable,
     stop,
   };
 }

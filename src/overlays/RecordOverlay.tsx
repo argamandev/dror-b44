@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createEntry, createPatient, type Patient } from '@/api/data';
 import { fullName, fmtTimer } from '@/api/format';
 import { summarizeSession } from '@/api/ai';
-import { useSessionRecorder } from '@/hooks/useSessionRecorder';
+import { useSessionRecorder, TRANSCRIPT_UNAVAILABLE_NOTICE } from '@/hooks/useSessionRecorder';
 import type { Draft } from '@/state/useAppState';
 
 // Ported verbatim from the design mock (lines 224-278, semantics 709/731-752).
@@ -129,6 +129,14 @@ const micErrorTextStyle: CSSProperties = {
   color: 'rgba(255,255,255,0.85)',
   textAlign: 'center',
   lineHeight: 1.6,
+};
+// Wave 4 Issue C: small, muted, non-blocking — recording continues underneath it.
+const transcriptUnavailableTextStyle: CSSProperties = {
+  fontSize: 12.5,
+  color: 'rgba(255,255,255,0.55)',
+  textAlign: 'center',
+  lineHeight: 1.5,
+  padding: '0 24px',
 };
 
 // -- assign phase (mirrors SearchOverlay's panel almost exactly) --
@@ -413,6 +421,9 @@ export default function RecordOverlay({
                 {fmtTimer(recorder.seconds)}
               </div>
               <dror-orb size="150" state={recorder.running ? 'listening' : 'idle'} />
+              {recorder.transcriptUnavailable && (
+                <div style={transcriptUnavailableTextStyle}>{TRANSCRIPT_UNAVAILABLE_NOTICE}</div>
+              )}
               <div style={controlsRowStyle}>
                 <div onClick={handleToggle} style={toggleBtnStyle}>
                   {recorder.running ? (
@@ -423,7 +434,7 @@ export default function RecordOverlay({
                     </svg>
                   )}
                 </div>
-                <button type="button" onClick={handleFinish} style={finishBtnStyle}>
+                <button type="button" onClick={handleFinish} className="pressable" style={finishBtnStyle}>
                   סיום
                 </button>
               </div>
@@ -448,9 +459,9 @@ export default function RecordOverlay({
             />
           </div>
           {typed && (
-            <div style={resultsWrapStyle}>
+            <div className="scroll-touch" style={resultsWrapStyle}>
               {results.map((p) => (
-                <div key={p.id} onClick={() => handleAssignExisting(p)} style={rowStyle}>
+                <div key={p.id} onClick={() => handleAssignExisting(p)} className="pressable" style={rowStyle}>
                   <span style={rowNameStyle}>{fullName(p)}</span>
                   <span style={rowSubStyle}>שיוך ההקלטה</span>
                 </div>
@@ -474,7 +485,7 @@ export default function RecordOverlay({
                       style={addInputStyle}
                     />
                   </div>
-                  <button type="button" onClick={handleCreateAndAssign} disabled={busy} style={addBtnStyle}>
+                  <button type="button" onClick={handleCreateAndAssign} disabled={busy} className="pressable" style={addBtnStyle}>
                     הוספת מטופל ושיוך
                   </button>
                 </div>

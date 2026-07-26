@@ -170,9 +170,9 @@ export default function SearchOverlay({ patients, onClose, onOpenPatient, showTo
           />
         </div>
         {typed && (
-          <div style={resultsWrapStyle}>
+          <div className="scroll-touch" style={resultsWrapStyle}>
             {results.map((p) => (
-              <div key={p.id} onClick={() => onOpenPatient(p.id)} style={rowStyle}>
+              <div key={p.id} onClick={() => onOpenPatient(p.id)} className="pressable" style={rowStyle}>
                 <span style={rowNameStyle}>{fullName(p)}</span>
                 <span style={rowSubStyle}>פתיחת תיק</span>
               </div>
@@ -196,7 +196,7 @@ export default function SearchOverlay({ patients, onClose, onOpenPatient, showTo
                     style={addInputStyle}
                   />
                 </div>
-                <button type="button" onClick={handleCreate} disabled={busy} style={addBtnStyle}>
+                <button type="button" onClick={handleCreate} disabled={busy} className="pressable" style={addBtnStyle}>
                   יצירת פרופיל מטופל
                 </button>
               </div>

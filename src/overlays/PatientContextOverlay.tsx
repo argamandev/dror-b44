@@ -131,7 +131,7 @@ export default function PatientContextOverlay({ patient, onClose, onSaved, showT
           onChange={(e) => setText(e.target.value)}
           style={textareaStyle}
         />
-        <button type="button" onClick={handleSave} disabled={busy} style={saveBtnStyle}>
+        <button type="button" onClick={handleSave} disabled={busy} className="pressable" style={saveBtnStyle}>
           שמירה
         </button>
       </div>

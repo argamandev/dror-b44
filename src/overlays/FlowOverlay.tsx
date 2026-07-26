@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { Patient } from '@/api/data';
 import { fullName, fmtTimer } from '@/api/format';
 import { summarizeSession, draftDocument } from '@/api/ai';
-import { useSessionRecorder } from '@/hooks/useSessionRecorder';
+import { useSessionRecorder, TRANSCRIPT_UNAVAILABLE_NOTICE } from '@/hooks/useSessionRecorder';
 
 // Ported verbatim from the design mock (lines 335-401 for the summary path,
 // 402-443 for the doc path, 342-352/444-452 for the shared chrome — step
@@ -117,6 +117,14 @@ const micErrorTextStyle: CSSProperties = {
   textAlign: 'center',
   lineHeight: 1.6,
   padding: '0 8px',
+};
+// Wave 4 Issue C: small, muted, non-blocking — recording continues underneath it.
+const transcriptUnavailableTextStyle: CSSProperties = {
+  fontSize: 12.5,
+  color: 'rgba(255,255,255,0.55)',
+  textAlign: 'center',
+  lineHeight: 1.5,
+  padding: '0 12px',
 };
 const recControlsStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 12 };
 const toggleBtnStyle: CSSProperties = {
@@ -492,6 +500,9 @@ export default function FlowOverlay({
                 </div>
                 <dror-orb size="120" state={recorder.running ? 'listening' : 'idle'} />
                 <div style={recTextStyle}>{recorder.running ? 'דרור מקשיב…' : 'ההקלטה מושהית'}</div>
+                {recorder.transcriptUnavailable && (
+                  <div style={transcriptUnavailableTextStyle}>{TRANSCRIPT_UNAVAILABLE_NOTICE}</div>
+                )}
                 <div style={recControlsStyle}>
                   <div onClick={handleToggleRecording} style={toggleBtnStyle}>
                     {recorder.running ? (
@@ -502,7 +513,7 @@ export default function FlowOverlay({
                       </svg>
                     )}
                   </div>
-                  <button type="button" onClick={handleFinishRecording} style={finishBtnStyle}>
+                  <button type="button" onClick={handleFinishRecording} className="pressable" style={finishBtnStyle}>
                     סיום הקלטה
                   </button>
                 </div>
@@ -520,7 +531,7 @@ export default function FlowOverlay({
               onChange={(e) => setNotes(e.target.value)}
               style={textareaStyle}
             />
-            <button type="button" onClick={handleContinueFromText} style={continueBtnStyle}>
+            <button type="button" onClick={handleContinueFromText} className="pressable" style={continueBtnStyle}>
               המשך
             </button>
           </div>
@@ -542,6 +553,7 @@ export default function FlowOverlay({
               type="button"
               onClick={handleCreateDraft}
               disabled={sourceEmpty}
+              className="pressable"
               style={sourceEmpty ? continueBtnDisabledStyle : continueBtnStyle}
             >
               יצירת טיוטה
@@ -567,7 +579,7 @@ export default function FlowOverlay({
               ))}
             </div>
             {docTypeReady && (
-              <button type="button" onClick={handleContinueFromDocType} style={continueBtnStyle}>
+              <button type="button" onClick={handleContinueFromDocType} className="pressable" style={continueBtnStyle}>
                 המשך
               </button>
             )}
@@ -586,7 +598,7 @@ export default function FlowOverlay({
               onChange={(e) => setDocPurpose(e.target.value)}
               style={docPurposeTextareaStyle}
             />
-            <button type="button" onClick={handleContinueFromPurpose} style={continueBtnStyle}>
+            <button type="button" onClick={handleContinueFromPurpose} className="pressable" style={continueBtnStyle}>
               המשך
             </button>
           </div>
@@ -616,6 +628,7 @@ export default function FlowOverlay({
               type="button"
               onClick={handleCreateDocDraft}
               disabled={docMeetingsGuardBlocked}
+              className="pressable"
               style={docMeetingsGuardBlocked ? continueBtnDisabledStyle : continueBtnStyle}
             >
               יצירת טיוטה

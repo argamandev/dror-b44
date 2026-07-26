@@ -169,10 +169,10 @@ export default function DraftEditor({ draft, draftFrom, onBodyChange, onClose, o
         />
       </div>
       <div style={buttonsRowStyle}>
-        <button type="button" onClick={() => onSave(false)} style={saveBtnStyle}>
+        <button type="button" onClick={() => onSave(false)} className="pressable" style={saveBtnStyle}>
           שמירה
         </button>
-        <button type="button" onClick={() => onSave(true)} style={saveDraftBtnStyle}>
+        <button type="button" onClick={() => onSave(true)} className="pressable" style={saveDraftBtnStyle}>
           שמירה כטיוטה
         </button>
       </div>

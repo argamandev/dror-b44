@@ -35,13 +35,13 @@ export default function TopBar({ onSearch, onRecord, onMenu }: TopBarProps) {
   return (
     <div dir="ltr" style={rowStyle}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-        <div onClick={onSearch} style={iconBtn}>
+        <div onClick={onSearch} className="pressable" style={iconBtn}>
           <svg viewBox="0 0 24 24" fill="none" width={28} height={28}>
             <circle cx={11} cy={11} r={7} stroke="#17171b" strokeWidth={2} />
             <path d="M21 21L16.5 16.5" stroke="#17171b" strokeWidth={2} strokeLinecap="round" />
           </svg>
         </div>
-        <div onClick={onRecord} style={iconBtn}>
+        <div onClick={onRecord} className="pressable" style={iconBtn}>
           <svg viewBox="0 0 24 24" fill="none" width={28} height={28}>
             <rect x={8} y={2} width={8} height={13} rx={4} stroke="#17171b" strokeWidth={2} />
             <path d="M5 11a7 7 0 0014 0" stroke="#17171b" strokeWidth={2} strokeLinecap="round" />
@@ -49,7 +49,7 @@ export default function TopBar({ onSearch, onRecord, onMenu }: TopBarProps) {
           </svg>
         </div>
       </div>
-      <div onClick={onMenu} style={menuBtn}>
+      <div onClick={onMenu} className="pressable" style={menuBtn}>
         <svg viewBox="0 0 24 24" fill="none" width={22} height={22}>
           <path d="M3 6h18M3 12h18M3 18h18" stroke="#17171b" strokeWidth={2} strokeLinecap="round" />
         </svg>

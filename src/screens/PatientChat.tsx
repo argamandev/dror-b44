@@ -172,7 +172,7 @@ export default function PatientChat({ title, messages, thinking, onBack }: Patie
       <div style={titleWrapStyle}>
         <div style={titleStyle}>{title}</div>
       </div>
-      <div ref={listRef} style={listStyle}>
+      <div ref={listRef} className="scroll-touch" style={listStyle}>
         {messages.map((m, i) =>
           m.role === 'dror' ? (
             <div key={i} style={drorRowStyle}>

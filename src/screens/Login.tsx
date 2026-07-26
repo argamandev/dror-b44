@@ -142,14 +142,25 @@ export default function Login({ onAuthed }: { onAuthed: () => void }) {
     <div
       dir="rtl"
       lang="he"
+      className="scroll-touch"
       style={{
-        minHeight: '100dvh',
+        // Login renders outside AppFrame, so it's the one screen not
+        // confined to that component's own overflow:hidden box — with the
+        // document itself locked (Wave 4 Issue A: html/body are now
+        // position:fixed;overflow:hidden), Login must be its own bounded
+        // scroll container (height, not minHeight, + overflowY:auto) so
+        // content that doesn't fit a short viewport (e.g. with the error
+        // message showing) can still be reached instead of being clipped
+        // with no way to scroll to it.
+        height: '100dvh',
+        overflowY: 'auto',
         background: 'var(--bg-warm)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         padding: '32px 26px',
+        boxSizing: 'border-box',
       }}
     >
       <dror-orb size="120" state="idle" />
@@ -199,7 +210,7 @@ export default function Login({ onAuthed }: { onAuthed: () => void }) {
             style={inputStyle}
             required
           />
-          <button type="submit" disabled={busy} style={buttonStyle}>
+          <button type="submit" disabled={busy} className="pressable" style={buttonStyle}>
             אימות
           </button>
         </form>
@@ -232,7 +243,7 @@ export default function Login({ onAuthed }: { onAuthed: () => void }) {
             style={inputStyle}
             required
           />
-          <button type="submit" disabled={busy} style={buttonStyle}>
+          <button type="submit" disabled={busy} className="pressable" style={buttonStyle}>
             {mode === 'login' ? 'כניסה' : 'הרשמה'}
           </button>
         </form>
@@ -245,7 +256,7 @@ export default function Login({ onAuthed }: { onAuthed: () => void }) {
             <span style={{ color: 'var(--faint)', fontSize: 13 }}>או</span>
             <div style={dividerLineStyle} />
           </div>
-          <button type="button" onClick={() => auth.loginWithGoogle()} style={googleButtonStyle}>
+          <button type="button" onClick={() => auth.loginWithGoogle()} className="pressable" style={googleButtonStyle}>
             <GoogleIcon />
             כניסה עם Google
           </button>
