@@ -4,7 +4,9 @@ const toastStyle: CSSProperties = {
   position: 'absolute',
   left: 30,
   right: 30,
-  bottom: 170,
+  // Sits above the ChatBar, tracking wherever the bar's bottom edge lands
+  // (Task W5.8) rather than hard-coding the 44px it used to assume.
+  bottom: 'calc(var(--chatbar-bottom) + 126px)',
   zIndex: 12,
   background: '#17171b',
   color: '#ffffff',

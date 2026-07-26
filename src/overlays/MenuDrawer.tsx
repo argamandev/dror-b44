@@ -38,7 +38,10 @@ const panelStyle: CSSProperties = {
   animation: 'drSlideIn 0.28s ease',
   display: 'flex',
   flexDirection: 'column',
-  padding: '64px 0 0',
+  // The panel itself still spans the frame edge to edge (top:0/bottom:0) so
+  // its background reaches under the status bar and the home indicator; the
+  // safe-area inset is spent on its padding instead (Task W5.8).
+  padding: 'calc(var(--top-inset) + 64px) 0 0',
   boxSizing: 'border-box',
 };
 
@@ -119,7 +122,7 @@ const chatTitleStyle: CSSProperties = {
 
 const footerStyle: CSSProperties = {
   borderTop: '1px solid #ebe9ec',
-  padding: '12px 16px 26px',
+  padding: '12px 16px calc(var(--bottom-inset) + 26px)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',

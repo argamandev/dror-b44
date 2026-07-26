@@ -8,6 +8,16 @@ import type { Overlay, Screen } from '@/state/useAppState';
 // color (index.html's <meta name="theme-color"> + iOS reading the page's own
 // background-color) that doesn't match every screen's own top-of-viewport
 // tone. This module keeps both in sync with whatever's actually on screen.
+//
+// Task W5.8 update: until W5.8, body carried the top safe-area padding plus
+// its own opaque var(--bg-warm), so the strip under the status bar showed THAT
+// and the color written to <html> below was never actually visible on a phone.
+// Now that the screens' background layers paint from y=0, the status-bar
+// region shows each screen's real gradient — which is what the values below
+// approximate, so they finally describe what's on screen instead of standing
+// in for it. <html>'s color still matters for the gutters either side of the
+// 430px column on desktop, and the <meta> for browsers that tint chrome from
+// it.
 
 /** 0-255 RGB channels plus a 0-1 alpha — the semi-transparent "foreground"
  * being laid over an opaque background in `blendOver`. */

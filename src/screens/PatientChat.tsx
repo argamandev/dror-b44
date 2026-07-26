@@ -16,12 +16,15 @@ interface PatientChatProps {
 
 const bgStyle: CSSProperties = { position: 'absolute', inset: 0, zIndex: 0, background: '#fbfafb' };
 
+// Background layer: anchored at the frame's true top (y=0, under the status
+// bar) and EXTENDED by the safe-area inset rather than pushed down by it, so
+// the glow's fade-out keeps the same distance below the content below it.
 const glowStyle: CSSProperties = {
   position: 'absolute',
   top: 0,
   left: 0,
   right: 0,
-  height: 210,
+  height: 'calc(var(--top-inset) + 210px)',
   zIndex: 1,
   background:
     'radial-gradient(130% 120% at 50% -50%, rgba(107,113,246,0.5) 0%, rgba(169,185,249,0.42) 38%, rgba(240,228,232,0.3) 62%, rgba(246,217,196,0.16) 80%, rgba(246,217,196,0) 100%)',
@@ -29,7 +32,7 @@ const glowStyle: CSSProperties = {
 
 const topRowStyle: CSSProperties = {
   position: 'absolute',
-  top: 66,
+  top: 'calc(var(--top-inset) + 66px)',
   left: 24,
   right: 24,
   zIndex: 5,
@@ -49,7 +52,7 @@ const backBtnStyle: CSSProperties = {
 
 const titleWrapStyle: CSSProperties = {
   position: 'absolute',
-  top: 74,
+  top: 'calc(var(--top-inset) + 74px)',
   left: 70,
   right: 70,
   textAlign: 'center',
@@ -65,11 +68,16 @@ const titleStyle: CSSProperties = {
 
 const listStyle: CSSProperties = {
   position: 'absolute',
-  top: 130,
-  // Grows by --kb-inset (useKeyboardInset.ts) so the iOS keyboard — which
-  // doesn't shrink the layout viewport — never covers the tail of the
-  // conversation; the scroll-to-bottom effect below re-pins on every change.
-  bottom: 'calc(168px + var(--kb-inset, 0px))',
+  top: 'calc(var(--top-inset) + 130px)',
+  // Clears the ChatBar completely so the last message is never hidden behind
+  // it (Task W5.8): --chatbar-bottom is where the bar's own bottom edge sits
+  // (its 44px margin, or the home-indicator inset if that's larger), and the
+  // 124px is the bar's height (105) plus the mock's 19px breathing room.
+  // Grows by --kb-inset (useKeyboardInset.ts) on top of that so the iOS
+  // keyboard — which doesn't shrink the layout viewport — never covers the
+  // tail of the conversation; the scroll-to-bottom effect below re-pins on
+  // every change.
+  bottom: 'calc(var(--chatbar-bottom) + 124px + var(--kb-inset, 0px))',
   left: 20,
   right: 20,
   zIndex: 4,

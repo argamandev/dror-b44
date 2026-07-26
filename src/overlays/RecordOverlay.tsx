@@ -44,7 +44,7 @@ const backdropStyle: CSSProperties = {
 
 const closeBtnStyle: CSSProperties = {
   position: 'absolute',
-  top: 64,
+  top: 'calc(var(--top-inset) + 64px)',
   right: 20,
   width: 40,
   height: 40,
@@ -60,7 +60,7 @@ const closeBtnStyle: CSSProperties = {
 // -- rec phase --
 const statusTextStyle: CSSProperties = {
   position: 'absolute',
-  top: 124,
+  top: 'calc(var(--top-inset) + 124px)',
   left: 36,
   right: 36,
   textAlign: 'center',
@@ -80,7 +80,10 @@ const recContentStyle: CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   gap: 34,
-  paddingBottom: 60,
+  // inset:0 keeps the backdrop full-bleed; the insets pad this content box so
+  // the timer/controls stay centred in the *visible* area (Task W5.8).
+  paddingTop: 'var(--top-inset)',
+  paddingBottom: 'calc(var(--bottom-inset) + 60px)',
   animation: 'drRise 0.35s ease',
 };
 
@@ -144,7 +147,7 @@ const panelStyle: CSSProperties = {
   position: 'absolute',
   left: 26,
   right: 26,
-  top: 150,
+  top: 'calc(var(--top-inset) + 150px)',
   animation: 'drRise 0.35s ease',
 };
 

@@ -22,12 +22,14 @@ const wrapStyle: CSSProperties = {
   animation: 'drFade 0.25s ease',
 };
 
+// Background layer: anchored at the frame's true top (y=0, under the status
+// bar) and EXTENDED by the safe-area inset rather than pushed down by it.
 const heroStyle: CSSProperties = {
   position: 'absolute',
   top: 0,
   left: 0,
   right: 0,
-  height: 150,
+  height: 'calc(var(--top-inset) + 150px)',
   opacity: 0.45,
   background:
     'radial-gradient(120% 120% at 50% -55%, rgba(107,113,246,0.9) 0%, rgba(169,185,249,0.75) 40%, rgba(240,228,232,0.5) 65%, rgba(246,217,196,0) 100%)',
@@ -35,7 +37,7 @@ const heroStyle: CSSProperties = {
 
 const closeBtnStyle: CSSProperties = {
   position: 'absolute',
-  top: 64,
+  top: 'calc(var(--top-inset) + 64px)',
   right: 20,
   width: 40,
   height: 40,
@@ -50,7 +52,7 @@ const closeBtnStyle: CSSProperties = {
 
 const titleWrapStyle: CSSProperties = {
   position: 'absolute',
-  top: 72,
+  top: 'calc(var(--top-inset) + 72px)',
   left: 70,
   right: 70,
   textAlign: 'center',
@@ -69,10 +71,15 @@ const dateStyle: CSSProperties = { fontSize: 12.5, color: '#9a9ca1', marginTop: 
 
 const textareaWrapStyle: CSSProperties = {
   position: 'absolute',
-  top: 148,
+  top: 'calc(var(--top-inset) + 148px)',
   left: 16,
   right: 16,
-  bottom: 118,
+  // The editor's bottom stack (textarea / buttons / footnote) lifts as a
+  // whole by the home-indicator inset (Task W5.8). Additive rather than
+  // max(), unlike the ChatBar: these three are stacked, so raising only the
+  // lowest of them to the inset would collapse it into the buttons above.
+  // DraftEditor is the one screen with no ChatBar, hence its own offsets.
+  bottom: 'calc(var(--bottom-inset) + 118px)',
   background: '#ffffff',
   borderRadius: 26,
   boxShadow: '0 10px 30px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.04)',
@@ -97,7 +104,7 @@ const textareaStyle: CSSProperties = {
 
 const buttonsRowStyle: CSSProperties = {
   position: 'absolute',
-  bottom: 44,
+  bottom: 'calc(var(--bottom-inset) + 44px)',
   left: 24,
   right: 24,
   zIndex: 2,
@@ -131,7 +138,7 @@ const saveDraftBtnStyle: CSSProperties = {
 
 const footnoteStyle: CSSProperties = {
   position: 'absolute',
-  bottom: 18,
+  bottom: 'calc(var(--bottom-inset) + 18px)',
   left: 0,
   right: 0,
   textAlign: 'center',

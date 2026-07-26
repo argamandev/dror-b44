@@ -33,12 +33,19 @@ html,body{
   touch-action:manipulation;
 }
 
+/* Task W5.8: body carries NO safe-area padding. It is the app shell — padding
+   it moved #root, and with it AppFrame and every screen's
+   `position:absolute;inset:0` background layer, so the gradients started one
+   safe-area inset below y=0 and body's own opaque var(--bg-warm) painted the
+   strip under the status bar (the founder's pale band; it also buried the
+   per-screen colour chromeColor.ts paints on <html>). At the bottom the same
+   padding pushed AppFrame's bottom-anchored origin below the physical edge,
+   clipping the ChatBar. The insets now live on content instead — see the
+   --top-inset / --bottom-inset / --chatbar-bottom tokens in tokens.css. */
 body{
   margin:0;
   font-family:var(--font-sans);
   color:var(--text);
-  padding-top:env(safe-area-inset-top);
-  padding-bottom:env(safe-area-inset-bottom);
   -webkit-font-smoothing:antialiased;
   -moz-osx-font-smoothing:grayscale;
   /* App chrome (labels, buttons, icons) isn't selectable — feels native.

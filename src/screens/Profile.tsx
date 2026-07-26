@@ -15,12 +15,15 @@ interface ProfileProps {
   onGoWorld: () => void;
 }
 
+// Background layer: anchored at the frame's true top (y=0, under the status
+// bar) and EXTENDED by the safe-area inset rather than pushed down by it, so
+// its rounded bottom edge keeps the same distance below the content.
 const heroStyle: CSSProperties = {
   position: 'absolute',
   top: 0,
   left: 0,
   right: 0,
-  height: 186,
+  height: 'calc(var(--top-inset) + 186px)',
   zIndex: 0,
   borderRadius: '0 0 44px 44px',
   background:
@@ -32,7 +35,7 @@ const heroStyle: CSSProperties = {
 // justify-content:space-between row.
 const iconColStyle: CSSProperties = {
   position: 'absolute',
-  top: 58,
+  top: 'calc(var(--top-inset) + 58px)',
   right: 24,
   zIndex: 5,
   display: 'flex',
@@ -61,7 +64,7 @@ const gearBtnStyle: CSSProperties = {
 
 const nameWrapStyle: CSSProperties = {
   position: 'absolute',
-  top: 92,
+  top: 'calc(var(--top-inset) + 92px)',
   left: 0,
   right: 0,
   zIndex: 4,
@@ -85,7 +88,7 @@ const subStyle: CSSProperties = {
 
 const actionsWrapStyle: CSSProperties = {
   position: 'absolute',
-  top: 220,
+  top: 'calc(var(--top-inset) + 220px)',
   left: 24,
   right: 24,
   zIndex: 4,

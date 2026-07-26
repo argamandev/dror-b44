@@ -26,7 +26,7 @@ const backdropStyle: CSSProperties = {
 
 const closeBtnStyle: CSSProperties = {
   position: 'absolute',
-  top: 64,
+  top: 'calc(var(--top-inset) + 64px)',
   right: 20,
   width: 40,
   height: 40,
@@ -43,7 +43,7 @@ const cardStyle: CSSProperties = {
   position: 'absolute',
   left: 22,
   right: 22,
-  top: 130,
+  top: 'calc(var(--top-inset) + 130px)',
   background: '#ffffff',
   borderRadius: 32,
   padding: '24px 20px',

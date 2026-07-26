@@ -24,7 +24,7 @@ const backdropStyle: CSSProperties = {
 
 const closeBtnStyle: CSSProperties = {
   position: 'absolute',
-  top: 64,
+  top: 'calc(var(--top-inset) + 64px)',
   right: 20,
   width: 40,
   height: 40,
@@ -41,7 +41,7 @@ const panelStyle: CSSProperties = {
   position: 'absolute',
   left: 26,
   right: 26,
-  top: 150,
+  top: 'calc(var(--top-inset) + 150px)',
   animation: 'drRise 0.35s ease',
 };
 

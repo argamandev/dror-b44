@@ -27,7 +27,7 @@ const heroStyle: CSSProperties = {
 
 const topRowStyle: CSSProperties = {
   position: 'absolute',
-  top: 66,
+  top: 'calc(var(--top-inset) + 66px)',
   left: 24,
   right: 24,
   zIndex: 5,
@@ -47,7 +47,7 @@ const backBtnStyle: CSSProperties = {
 
 const titleWrapStyle: CSSProperties = {
   position: 'absolute',
-  top: 116,
+  top: 'calc(var(--top-inset) + 116px)',
   left: 0,
   right: 0,
   zIndex: 4,
@@ -65,7 +65,7 @@ const subStyle: CSSProperties = { fontSize: 13.5, color: '#9a9ca1', marginTop: 3
 
 const filtersRowStyle: CSSProperties = {
   position: 'absolute',
-  top: 192,
+  top: 'calc(var(--top-inset) + 192px)',
   left: 0,
   right: 0,
   zIndex: 4,
@@ -76,8 +76,10 @@ const filtersRowStyle: CSSProperties = {
 
 const listStyle: CSSProperties = {
   position: 'absolute',
-  top: 240,
-  bottom: 170,
+  top: 'calc(var(--top-inset) + 240px)',
+  // Clears the ChatBar the same way the chat list does (Task W5.8): the bar's
+  // own bottom edge, plus its 105px height, plus the mock's 21px gap.
+  bottom: 'calc(var(--chatbar-bottom) + 126px)',
   left: 20,
   right: 20,
   zIndex: 4,

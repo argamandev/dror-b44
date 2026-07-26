@@ -18,10 +18,14 @@ const barStyle: CSSProperties = {
   position: 'absolute',
   left: 15,
   right: 15,
-  // Grows by --kb-inset (useKeyboardInset.ts) so the iOS on-screen keyboard
-  // — which doesn't shrink the layout viewport — never covers the bar; the
-  // transition below makes it glide with the keyboard instead of jumping.
-  bottom: 'calc(44px + var(--kb-inset, 0px))',
+  // --chatbar-bottom (tokens.css) is max(44px, safe-area-inset-bottom): the
+  // mock's 44px margin normally, widened to the home-indicator inset if that
+  // is ever larger, so the bar never floats over the indicator (Task W5.8).
+  // Grows by --kb-inset (useKeyboardInset.ts) on top of that so the iOS
+  // on-screen keyboard — which doesn't shrink the layout viewport — never
+  // covers the bar; the transition below makes it glide with the keyboard
+  // instead of jumping.
+  bottom: 'calc(var(--chatbar-bottom) + var(--kb-inset, 0px))',
   height: 105,
   zIndex: 6,
   background: '#ffffff',

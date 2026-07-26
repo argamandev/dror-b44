@@ -4,5 +4,19 @@
   --accent:#6B71F6; --accent-soft:#A9B9F9; --blush:#F0E4E8; --cream:#F6D9C4; --ivory:#FBF6EF;
   --grad-hero:radial-gradient(108% 52% at 50% -4%, rgba(107,113,246,1) 0%, rgba(107,113,246,0.94) 16%, rgba(169,185,249,0.92) 42%, rgba(240,228,232,0.78) 62%, rgba(246,217,196,0.5) 74%, rgba(246,217,196,0) 85%);
   --font-serif:'Frank Ruhl Libre',serif; --font-sans:Assistant,-apple-system,sans-serif;
+  /* Task W5.8: the ONLY two places in the app that read env(). Everything
+     else consumes these vars, so the safe areas can be simulated (and the
+     layer order verified) on a desktop browser by overriding them. Both are
+     spent on CONTENT — insets pad top bars, headers, the ChatBar and scroll
+     containers, and EXTEND background layers; they never offset or clip a
+     background layer, and never the app shell (see base.css). */
   --top-inset:env(safe-area-inset-top, 0px);
+  --bottom-inset:env(safe-area-inset-bottom, 0px);
+  /* Where the floating ChatBar's bottom edge sits inside the frame: its
+     design margin, or the home-indicator inset when that's larger, so the
+     bar never lands under the indicator. Everything that has to clear the
+     bar (the chat + world scroll lists, the toast) offsets from this rather
+     than re-deriving it, so they can't drift apart. --kb-inset (Wave 4) is
+     composed on top by each consumer. */
+  --chatbar-bottom:max(44px, var(--bottom-inset));
 }

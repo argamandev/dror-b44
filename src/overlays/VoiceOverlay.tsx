@@ -44,7 +44,7 @@ const backdropStyle: CSSProperties = {
 
 const closeBtnStyle: CSSProperties = {
   position: 'absolute',
-  top: 64,
+  top: 'calc(var(--top-inset) + 64px)',
   right: 20,
   width: 40,
   height: 40,
@@ -65,7 +65,10 @@ const contentStyle: CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   gap: 44,
-  paddingBottom: 70,
+  // inset:0 keeps the backdrop full-bleed; the insets pad this content box so
+  // the orb stays centred in the *visible* area (Task W5.8).
+  paddingTop: 'var(--top-inset)',
+  paddingBottom: 'calc(var(--bottom-inset) + 70px)',
   animation: 'drRise 0.55s ease',
 };
 

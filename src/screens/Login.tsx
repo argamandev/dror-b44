@@ -159,7 +159,11 @@ export default function Login({ onAuthed }: { onAuthed: () => void }) {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '32px 26px',
+        // Task W5.8: the background (and the scroll box) spans the full
+        // 100dvh so it paints under the status bar and home indicator; the
+        // safe areas are spent on this padding so the form never lands under
+        // either.
+        padding: 'calc(var(--top-inset) + 32px) 26px calc(var(--bottom-inset) + 32px)',
         boxSizing: 'border-box',
       }}
     >
