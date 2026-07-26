@@ -14,10 +14,10 @@ import { createClientFromRequest } from "npm:@base44/sdk";
 // Voice id is a placeholder (ElevenLabs' stock "Adam" voice) — swap for a
 // different/cloned voice later; nothing else here needs to change.
 const ELEVEN_VOICE_ID = "pNInz6obpgDQGcFmaJgB";
-// eleven_multilingual_v2: stable, Hebrew-capable. (Deliberately not
-// eleven_v3 — that name is unverified/unstable as far as this integration
-// can confirm; multilingual_v2 is the documented safe choice.)
-const ELEVEN_MODEL_ID = "eleven_multilingual_v2";
+// eleven_v3: verified Hebrew-capable (round-trip tested 2026-07-27 — v3
+// audio of a Hebrew sentence transcribed back word-for-word by scribe_v1).
+// eleven_multilingual_v2 (the prior model here) does NOT support Hebrew.
+const ELEVEN_MODEL_ID = "eleven_v3";
 const TEXT_MAX = 4000; // a single spoken reply should never be near this; defensive cap only
 
 function toBase64(bytes: Uint8Array): string {
