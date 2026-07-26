@@ -23,6 +23,11 @@ import { useKeyboardInset } from '@/hooks/useKeyboardInset';
 
 type User = { email: string; full_name?: string };
 
+// The tagline and the mock home-indicator pill below are preview-only chrome:
+// they sell the "phone" look when the app is viewed as a page, and both are
+// hidden once installed (className="preview-only", see base.css). Their
+// offsets therefore stay bare numbers — they are only ever laid out with the
+// safe-area insets at 0.
 const taglineStyle: CSSProperties = {
   position: 'absolute',
   bottom: 20,
@@ -276,10 +281,10 @@ function AuthedApp({ user }: { user: User }) {
         />
       )}
 
-      <div dir="ltr" style={taglineStyle}>
+      <div dir="ltr" className="preview-only" style={taglineStyle}>
         The first AI assistant for Israeli psychologists.
       </div>
-      <div style={homeIndicatorStyle} />
+      <div className="preview-only" style={homeIndicatorStyle} />
     </AppFrame>
   );
 }

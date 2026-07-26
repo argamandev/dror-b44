@@ -84,6 +84,19 @@ input,textarea,button{font-family:var(--font-sans)}
    overflow:auto elements. */
 .scroll-touch{-webkit-overflow-scrolling:touch}
 
+/* Task W5.8 (fix round 1): preview-only mock chrome. The tagline and the mock
+   home-indicator pill in App.tsx exist to sell the "phone" look when the app
+   is viewed as a page in a desktop/browser preview. Installed, they are
+   artifacts: iOS draws its own home indicator (so the pill can only ever
+   approximate it) and the tagline sits in the bottom safe area, which this
+   task's structural rule reserves for the home indicator — and it can't be
+   lifted out of the way either, since --bottom-inset + 20px would put it
+   behind the ChatBar. Both only ever fit when the inset is 0, so they are
+   hidden in standalone and left exactly as-is everywhere else. */
+@media (display-mode: standalone){
+  .preview-only{display:none}
+}
+
 @keyframes drFade{from{opacity:0}to{opacity:1}}
 @keyframes drRise{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:translateY(0)}}
 @keyframes drSlideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
