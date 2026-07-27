@@ -2,7 +2,12 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createEntry, createPatient, type Patient } from '@/api/data';
 import { fullName, fmtTimer } from '@/api/format';
 import { summarizeSession } from '@/api/ai';
-import { useSessionRecorder, TRANSCRIPT_UNAVAILABLE_NOTICE } from '@/hooks/useSessionRecorder';
+import {
+  useSessionRecorder,
+  TRANSCRIPT_UNAVAILABLE_NOTICE,
+  TRANSCRIBING_NOTICE,
+  RECORDED_TRANSCRIPTION_FAILED_TOAST,
+} from '@/hooks/useSessionRecorder';
 import { getMicGuidance } from '@/hooks/micCopy';
 import type { Draft } from '@/state/useAppState';
 
@@ -330,6 +335,7 @@ export default function RecordOverlay({
   const handleFinish = async () => {
     const result = await recorder.stop();
     if (closedRef.current) return;
+    if (result.transcriptionFailed) showToast(RECORDED_TRANSCRIPTION_FAILED_TOAST);
     setSaved(result);
     setPhase('assign');
   };
@@ -441,7 +447,12 @@ export default function RecordOverlay({
       </div>
 
       {phase === 'rec' &&
-        (recorder.micErrorKind ? (
+        (recorder.transcribing ? (
+          <div style={generatingWrapStyle}>
+            <dror-orb size="120" state="thinking" />
+            <div style={generatingTextStyle}>{TRANSCRIBING_NOTICE}</div>
+          </div>
+        ) : recorder.micErrorKind ? (
           <div style={micErrorWrapStyle}>
             <div style={micErrorContentStyle}>
               <div style={micErrorHeadlineStyle}>{getMicGuidance(recorder.micErrorKind).headline}</div>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { classifyMicError, isMicSupported, MIC_UNSUPPORTED, type MicErrorKind } from './micAccess';
+import { SttError, transcribeAudio, type SttErrorCode } from '@/api/stt';
 
 // Minimal ambient typing for the (non-standard, Chrome-only) Web Speech API —
 // there is no official DOM lib type for it.
@@ -63,6 +64,45 @@ const TRANSCRIPT_UNAVAILABLE_RECOGNITION_ERRORS = new Set(['service-not-allowed'
 export const TRANSCRIPT_UNAVAILABLE_NOTICE =
   'תמלול חי אינו זמין במכשיר הזה — ההקלטה נמשכת, ואפשר גם לכתוב נקודות במקום';
 
+// Task W5.5 — shown by FlowOverlay/RecordOverlay in place of the recording
+// controls while stop() is awaiting server-side transcription of the
+// recorded audio (see `transcribing` / shouldTranscribeRecording below).
+export const TRANSCRIBING_NOTICE = 'דרור מתמלל את ההקלטה…';
+
+// Requirement 2 (task brief): over this size, keep the honest no-transcript
+// path instead of sending a very large upload.
+export const RECORDED_TRANSCRIPTION_MAX_BYTES = 15 * 1024 * 1024;
+
+// Calm, single toast so the user knows a transcription attempt happened and
+// didn't land (requirement 2) — never shown for `no_key` (see
+// shouldToastTranscriptionFailure below).
+export const RECORDED_TRANSCRIPTION_FAILED_TOAST = 'דרור ניסה לתמלל את ההקלטה ולא הצליח הפעם';
+
+/**
+ * Pure decision (Task W5.5, TDD'd in useSessionRecorder.test.ts): should
+ * stop() attempt server-side transcription of the recorded audio blob?
+ * Requirement 3 — when live recognition delivered a transcript throughout,
+ * `transcriptUnavailable` stays false and this is always false: the live
+ * path is untouched, never double-transcribed. Requirement 2 — an empty or
+ * over-the-gate blob keeps the existing honest no-transcript path instead.
+ */
+export function shouldTranscribeRecording(transcriptUnavailable: boolean, blobSize: number): boolean {
+  if (!transcriptUnavailable) return false;
+  if (blobSize <= 0) return false;
+  return blobSize <= RECORDED_TRANSCRIPTION_MAX_BYTES;
+}
+
+/**
+ * Error routing (requirement 2, TDD'd alongside shouldTranscribeRecording):
+ * `no_key` means the transcription feature simply isn't configured
+ * server-side — not the therapist's problem and not actionable, so it stays
+ * silent (the existing no-transcript path, no toast). Every other outcome
+ * (`too_large`, `stt_failed`) gets one calm toast.
+ */
+export function shouldToastTranscriptionFailure(code: SttErrorCode): boolean {
+  return code !== 'no_key';
+}
+
 declare global {
   interface Window {
     SpeechRecognition?: SpeechRecognitionCtor;
@@ -88,10 +128,24 @@ export interface SessionRecorder {
   micErrorKind: MicErrorKind | null;
   /** The transcription service failed (or isn't supported) while the mic itself is fine — recording continues, transcript stays empty. */
   transcriptUnavailable: boolean;
+  /** Task W5.5: true while stop() is awaiting server-side transcription of the recorded audio — show TRANSCRIBING_NOTICE while this is true. */
+  transcribing: boolean;
   start(): Promise<void>;
   pause(): void;
   resume(): void;
-  stop(): Promise<{ seconds: number; transcript: string }>;
+  /**
+   * Stops recording. When `transcriptUnavailable` is true and the recorded
+   * audio is within the size gate (Task W5.5), this awaits server-side
+   * transcription before resolving — `transcript` in the result (and the
+   * hook's own reactive `transcript`) already has the filled-in text by
+   * then, so callers must not start summarization before this resolves. The
+   * live-transcript path (`transcriptUnavailable` stays false throughout) is
+   * untouched — no extra await, no behavior change. `transcriptionFailed` is
+   * true when transcription was attempted and did not land (excluding the
+   * silent, not-configured `no_key` case) — pair it with
+   * RECORDED_TRANSCRIPTION_FAILED_TOAST.
+   */
+  stop(): Promise<{ seconds: number; transcript: string; transcriptionFailed: boolean }>;
   reset(): void;
 }
 
@@ -104,22 +158,33 @@ function appendFinal(current: string, chunk: string): string {
   return /\s$/.test(current) || /^\s/.test(chunk) ? current + chunk : `${current} ${chunk}`;
 }
 
-// Records a session: keeps the mic hot via MediaRecorder (audio chunks are
-// discarded for now — future-proofing for audio upload) while running live
+// Records a session: keeps the mic hot via MediaRecorder while running live
 // Hebrew transcription through SpeechRecognition in parallel. Chrome kills
 // SpeechRecognition after a few seconds of silence even in `continuous`
 // mode, so `onend` auto-restarts it whenever we're still supposed to be
 // listening (tracked via `wantRecognitionRef`, distinct from an intentional
-// pause/stop).
+// pause/stop). Task W5.5: the MediaRecorder's audio chunks are retained
+// (not discarded) so a session with no live transcript can be handed to
+// server-side transcription once stop() decides it's needed — see
+// shouldTranscribeRecording and stop() below.
 export function useSessionRecorder(): SessionRecorder {
   const [seconds, setSeconds] = useState(0);
   const [running, setRunning] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [micErrorKind, setMicErrorKind] = useState<MicErrorKind | null>(null);
   const [transcriptUnavailable, setTranscriptUnavailable] = useState(false);
+  // Task W5.5: true while stop() is awaiting transcribeAudio() for a session
+  // that had no live transcript — see stop()'s docstring below.
+  const [transcribing, setTranscribing] = useState(false);
 
   const secondsRef = useRef(0);
   const transcriptRef = useRef('');
+  // Mirrors `transcriptUnavailable` synchronously — stop() reads this to
+  // decide whether the recorded-transcription path applies, the same
+  // ref-mirrors-state rationale as transcriptRef above (lets stop()'s
+  // useCallback stay stable rather than needing to be redefined every time
+  // the state itself changes).
+  const transcriptUnavailableRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -131,6 +196,28 @@ export function useSessionRecorder(): SessionRecorder {
   // each open their own getUserMedia stream, the second silently overwriting
   // streamRef/recorderRef and leaking the first (nothing left to stop it).
   const startingRef = useRef(false);
+  // Task W5.5: the recorded audio, retained only long enough to hand to
+  // transcribeAudio() once stop() decides it's needed (shouldTranscribeRecording)
+  // — cleared the instant it's no longer needed (releaseMedia, or right after
+  // being read into a Blob), so nothing holds a session's audio beyond that.
+  const chunksRef = useRef<Blob[]>([]);
+  // True once this hook instance has unmounted — stop()'s post-transcription
+  // continuation (a real network round-trip) can resolve well after that and
+  // must not write state on a component that's gone (mirrors useDictation.ts's
+  // / useVoiceChat.ts's closedRef).
+  const closedRef = useRef(false);
+  // stop() re-entrancy guard (Task W5.5): a caller can invoke stop() a second
+  // time while the first call is still awaiting transcription (e.g. the user
+  // taps the overlay's X while TRANSCRIBING_NOTICE is showing) — without
+  // this, the second call would race the first's MediaRecorder teardown (see
+  // stopRecorderAndCollectBlob) and could clear chunksRef out from under the
+  // first call's still-pending onstop. A concurrent caller gets back the
+  // SAME promise instead of starting a second, conflicting stop.
+  const stopPromiseRef = useRef<Promise<{
+    seconds: number;
+    transcript: string;
+    transcriptionFailed: boolean;
+  }> | null>(null);
 
   const supported = !!RecognitionCtor;
 
@@ -152,6 +239,11 @@ export function useSessionRecorder(): SessionRecorder {
     setTranscript(t);
   }, []);
 
+  const setTranscriptUnavailableBoth = useCallback((v: boolean) => {
+    transcriptUnavailableRef.current = v;
+    setTranscriptUnavailable(v);
+  }, []);
+
   // Stops the MediaRecorder and releases the getUserMedia stream's tracks.
   // Shared by stop() (an intentional close) and rec.onerror's mic-access
   // branch below (an async failure that can arrive well after start() already
@@ -171,7 +263,53 @@ export function useSessionRecorder(): SessionRecorder {
       streamRef.current.getTracks().forEach((t) => t.stop()); // mic indicator must go off
       streamRef.current = null;
     }
+    // Task W5.5: this is the hard-teardown path (onerror's mic-access branch,
+    // a fresh start(), unmount) — any retained audio from an in-progress
+    // recorded-transcription session is abandoned along with everything else.
+    chunksRef.current = [];
   }, []);
+
+  // Task W5.5 — the async counterpart to releaseMedia() above, used ONLY on
+  // the no-live-transcript path (see stop() below). MediaRecorder.stop() only
+  // queues its final 'dataavailable'/'stop' events asynchronously — there is
+  // no synchronous "flush now" API — so building a Blob immediately the way
+  // releaseMedia()'s fire-and-forget teardown does would miss the tail of the
+  // recording. This awaits that flush, then does the same stream teardown
+  // releaseMedia() does, and hands back whatever chunksRef accumulated (null
+  // when there's nothing to send).
+  const stopRecorderAndCollectBlob = useCallback((): Promise<Blob | null> => {
+    const recorder = recorderRef.current;
+    if (!recorder || recorder.state === 'inactive') {
+      releaseMedia();
+      return Promise.resolve(null);
+    }
+    return new Promise<Blob | null>((resolve) => {
+      const finish = () => {
+        const chunks = chunksRef.current;
+        const type = recorder.mimeType || 'audio/webm';
+        const blob = chunks.length > 0 ? new Blob(chunks, { type }) : null;
+        chunksRef.current = [];
+        recorderRef.current = null;
+        const stream = streamRef.current;
+        streamRef.current = null;
+        if (stream) {
+          try {
+            stream.getTracks().forEach((t) => t.stop()); // mic indicator must go off
+          } catch {
+            /* ignore */
+          }
+        }
+        resolve(blob);
+      };
+      recorder.onstop = finish;
+      recorder.onerror = finish; // don't hang forever if stopping itself errors
+      try {
+        recorder.stop();
+      } catch {
+        finish();
+      }
+    });
+  }, [releaseMedia]);
 
   const createRecognition = useCallback((): SpeechRecognitionLike | null => {
     if (!RecognitionCtor) return null;
@@ -210,7 +348,7 @@ export function useSessionRecorder(): SessionRecorder {
       } else if (TRANSCRIPT_UNAVAILABLE_RECOGNITION_ERRORS.has(ev.error)) {
         // The mic/MediaRecorder are unaffected — recording keeps running,
         // just without a live transcript.
-        setTranscriptUnavailable(true);
+        setTranscriptUnavailableBoth(true);
       }
     };
     rec.onend = () => {
@@ -221,7 +359,7 @@ export function useSessionRecorder(): SessionRecorder {
           // iOS can throw here in edge states (e.g. Dictation just got
           // disabled) — the mic/recording are unaffected, only live
           // transcription is lost; never surface this as micError.
-          setTranscriptUnavailable(true);
+          setTranscriptUnavailableBoth(true);
         }
       }
     };
@@ -254,7 +392,8 @@ export function useSessionRecorder(): SessionRecorder {
     setSeconds(0);
     setTranscript('');
     setMicErrorKind(null);
-    setTranscriptUnavailable(false);
+    setTranscriptUnavailableBoth(false);
+    setTranscribing(false);
   }, []);
 
   const start = useCallback(async () => {
@@ -271,6 +410,9 @@ export function useSessionRecorder(): SessionRecorder {
       stopRecognition();
       releaseMedia();
       reset();
+      // Task W5.5: a fresh recording attempt must never inherit a previous
+      // one's in-flight (or just-settled) stop()/transcription promise.
+      stopPromiseRef.current = null;
 
       // No getUserMedia at all (rather than a call that would throw/reject) —
       // classify it the same way a real rejection would be, via the sentinel,
@@ -292,9 +434,14 @@ export function useSessionRecorder(): SessionRecorder {
 
       try {
         const recorder = new MediaRecorder(streamRef.current);
-        recorder.ondataavailable = () => {
-          /* chunks discarded this week — MediaRecorder is only kept running to
-             keep the mic hot and future-proof audio upload */
+        chunksRef.current = [];
+        // Task W5.5: retained (not discarded) so a session with no live
+        // transcript can be handed to server-side transcription once stop()
+        // decides it's needed (shouldTranscribeRecording) — released the
+        // moment that's done, or immediately by releaseMedia() if it never
+        // ends up needed.
+        recorder.ondataavailable = (ev) => {
+          if (ev.data && ev.data.size > 0) chunksRef.current.push(ev.data);
         };
         recorder.start();
         recorderRef.current = recorder;
@@ -315,12 +462,12 @@ export function useSessionRecorder(): SessionRecorder {
         } catch {
           wantRecognitionRef.current = false;
           recognitionRef.current = null;
-          setTranscriptUnavailable(true);
+          setTranscriptUnavailableBoth(true);
         }
       } else {
         // No SpeechRecognition API at all — recording still proceeds via
         // MediaRecorder alone, just without a live transcript.
-        setTranscriptUnavailable(true);
+        setTranscriptUnavailableBoth(true);
       }
 
       startTimer();
@@ -352,10 +499,10 @@ export function useSessionRecorder(): SessionRecorder {
       } catch {
         wantRecognitionRef.current = false;
         recognitionRef.current = null;
-        setTranscriptUnavailable(true);
+        setTranscriptUnavailableBoth(true);
       }
     } else {
-      setTranscriptUnavailable(true);
+      setTranscriptUnavailableBoth(true);
     }
     try {
       recorderRef.current?.resume();
@@ -366,17 +513,75 @@ export function useSessionRecorder(): SessionRecorder {
     setRunning(true);
   }, [createRecognition, startTimer, supported]);
 
-  const stop = useCallback(async () => {
-    stopRecognition();
-    releaseMedia();
-    stopTimer();
-    setRunning(false);
-    return { seconds: secondsRef.current, transcript: transcriptRef.current };
-  }, [stopRecognition, releaseMedia, stopTimer]);
+  // Task W5.5 — when this session had no live transcript
+  // (transcriptUnavailable), stop() now awaits server-side transcription of
+  // the recorded audio before resolving (see shouldTranscribeRecording and
+  // `transcribing` above), so a caller's summarize step never starts before
+  // the text exists. On success, `transcript` (both the returned value and
+  // the reactive `transcript` state) is replaced with the server result —
+  // strictly a superset of whatever partial live text may have preceded a
+  // mid-session recognition failure, never a smaller one, so there's nothing
+  // to merge. The live-transcript path (transcriptUnavailable stays false
+  // throughout) is completely untouched: no extra await, no behavior change
+  // (requirement 3). Re-entrant-safe via stopPromiseRef — see its docstring
+  // above — and every continuation past an `await` checks closedRef before
+  // touching state, since the caller can unmount while transcription is
+  // still in flight.
+  const stop = useCallback((): Promise<{ seconds: number; transcript: string; transcriptionFailed: boolean }> => {
+    if (stopPromiseRef.current) return stopPromiseRef.current;
+
+    const run = async () => {
+      stopRecognition();
+
+      const wantsRecordedTranscription = transcriptUnavailableRef.current;
+      let blob: Blob | null = null;
+      if (wantsRecordedTranscription) {
+        blob = await stopRecorderAndCollectBlob();
+      } else {
+        releaseMedia();
+      }
+
+      stopTimer();
+      if (!closedRef.current) setRunning(false);
+
+      let finalTranscript = transcriptRef.current;
+      let transcriptionFailed = false;
+
+      if (blob && shouldTranscribeRecording(wantsRecordedTranscription, blob.size)) {
+        if (!closedRef.current) setTranscribing(true);
+        try {
+          const text = await transcribeAudio(blob);
+          finalTranscript = text;
+          if (!closedRef.current) setTranscriptBoth(text);
+        } catch (err) {
+          // Requirement 2: no_key (feature not configured) stays silent;
+          // every other outcome (too_large, stt_failed) is toast-worthy. The
+          // existing honest no-transcript path is kept either way —
+          // finalTranscript is left exactly as it was (empty, since this only
+          // runs when there was no live transcript to begin with).
+          const code = err instanceof SttError ? err.code : 'stt_failed';
+          transcriptionFailed = shouldToastTranscriptionFailure(code);
+        } finally {
+          if (!closedRef.current) setTranscribing(false);
+        }
+      }
+
+      return { seconds: secondsRef.current, transcript: finalTranscript, transcriptionFailed };
+    };
+
+    const promise = run();
+    stopPromiseRef.current = promise;
+    void promise.finally(() => {
+      stopPromiseRef.current = null;
+    });
+    return promise;
+  }, [stopRecognition, stopRecorderAndCollectBlob, releaseMedia, stopTimer, setTranscriptBoth]);
 
   // Safety net: release the mic/timer if the component unmounts mid-recording.
   useEffect(() => {
+    closedRef.current = false;
     return () => {
+      closedRef.current = true;
       stopRecognition();
       releaseMedia();
       stopTimer();
@@ -390,6 +595,7 @@ export function useSessionRecorder(): SessionRecorder {
     supported,
     micErrorKind,
     transcriptUnavailable,
+    transcribing,
     start,
     pause,
     resume,

@@ -2,7 +2,12 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { Patient } from '@/api/data';
 import { fullName, fmtTimer } from '@/api/format';
 import { summarizeSession, draftDocument } from '@/api/ai';
-import { useSessionRecorder, TRANSCRIPT_UNAVAILABLE_NOTICE } from '@/hooks/useSessionRecorder';
+import {
+  useSessionRecorder,
+  TRANSCRIPT_UNAVAILABLE_NOTICE,
+  TRANSCRIBING_NOTICE,
+  RECORDED_TRANSCRIPTION_FAILED_TOAST,
+} from '@/hooks/useSessionRecorder';
 import { isMicSupported } from '@/hooks/micAccess';
 import { getMicGuidance } from '@/hooks/micCopy';
 
@@ -374,7 +379,9 @@ export default function FlowOverlay({
   };
 
   const handleFinishRecording = async () => {
-    await recorder.stop();
+    const result = await recorder.stop();
+    if (closedRef.current) return;
+    if (result.transcriptionFailed) showToast(RECORDED_TRANSCRIPTION_FAILED_TOAST);
     setStep(3);
   };
 
@@ -473,6 +480,18 @@ export default function FlowOverlay({
         </svg>
       </div>
       <div style={panelStyle}>
+        {recorder.transcribing ? (
+          // Task W5.5: stop() is awaiting server-side transcription of a
+          // session that had no live transcript — the summary step must not
+          // start before this resolves (the brief's requirement 1), so
+          // everything below (including the back link) stays hidden behind
+          // this, exactly like the `generating` full-panel replacement does.
+          <div style={generatingWrapStyle}>
+            <dror-orb size="120" state="thinking" />
+            <div style={generatingTextStyle}>{TRANSCRIBING_NOTICE}</div>
+          </div>
+        ) : (
+          <>
         {!generating && (
           <div style={headerStyle}>
             <div style={headerTitleStyle}>{title}</div>
@@ -691,6 +710,8 @@ export default function FlowOverlay({
             <dror-orb size="120" state="thinking" />
             <div style={generatingTextStyle}>דרור מנסח את הטיוטה…</div>
           </div>
+        )}
+          </>
         )}
       </div>
     </div>
