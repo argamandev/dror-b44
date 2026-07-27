@@ -25,12 +25,13 @@ html,body{
   overscroll-behavior:none;
 }
 
-/* THE WHITE BLOCK — the shell overflows the layout viewport by exactly the
-   strip iOS withholds from it (0 everywhere else; see src/ui/shellGap.ts for
-   the measurement and the why). body is position:fixed, so this paints past
-   the viewport edge without creating anything scrollable, and #root, AppFrame
-   and every `inset:0` layer inside it inherit the corrected height. */
-body{height:calc(100% + var(--shell-gap, 0px))}
+/* THE STRIP (src/ui/shellGap.ts). Growing the shell into it was measured and
+   rejected: the founder's screenshot showed the ChatBar laid out correctly at
+   932 but PAINTED only to 873 — iOS renders backgrounds into that strip and
+   clips content out of it. So the app lays out entirely above it (see
+   --chatbar-bottom in tokens.css) and the strip is coloured instead, by
+   body's background, which chromeColor.ts keeps matched to the bottom edge of
+   whatever surface is on screen. */
 
 /* THE WHITE BLOCK, measured from the founder's screenshots (27.7): on his
    installed PWA the app shell ended 59px above the physical bottom edge — the

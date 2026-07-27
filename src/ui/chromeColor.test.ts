@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { blendOver, computeChromeColor } from './chromeColor';
+import { blendOver, computeChromeColor, computeStripBackground } from './chromeColor';
 
 describe('blendOver', () => {
   it('an opaque fg (alpha 1) returns the fg color untouched, regardless of bg', () => {
@@ -53,5 +53,28 @@ describe('computeChromeColor', () => {
     // B: 246*0.2 + 239*0.8 = 240.4 -> 240 -> 0xf0
     expect(computeChromeColor('home', 'menu')).toBe('#dedbf0');
     expect(computeChromeColor('chat', 'menu')).toBe('#dedbf0');
+  });
+});
+
+describe('computeStripBackground', () => {
+  it('gives each screen the flat base its gradient has faded to by the bottom', () => {
+    expect(computeStripBackground('home', null)).toBe('#faf8fa');
+    expect(computeStripBackground('profile', null)).toBe('#faf8fa');
+    expect(computeStripBackground('world', null)).toBe('#faf8fa');
+    expect(computeStripBackground('chat', null)).toBe('#fbfafb');
+  });
+
+  it('continues a dark overlay scrim rather than leaving a light block under it', () => {
+    expect(computeStripBackground('home', 'record')).toBe('#4a4a52');
+    expect(computeStripBackground('profile', 'flow')).toBe('#4a4a52');
+  });
+
+  it('splits the menu strip where the drawer panel meets the app peek', () => {
+    // R: 23*0.42 + 250*0.58 = 154.66 -> 155 -> 0x9b
+    // G: 23*0.42 + 248*0.58 = 153.5  -> 154 -> 0x9a
+    // B: 27*0.42 + 250*0.58 = 156.34 -> 156 -> 0x9c
+    expect(computeStripBackground('home', 'menu')).toBe(
+      'linear-gradient(to right, #9b9a9c 0 14%, #fbf6ef 14% 100%)'
+    );
   });
 });

@@ -7,16 +7,19 @@
 // reaches the clock — the look we want) but never grows the viewport, so the
 // space it borrowed at the top is handed back as dead canvas at the bottom.
 //
-// Nothing in the page can lay out there. `height:100%`, `100dvh` and `100vh`
-// all measured the same 873 — they all report the layout viewport, and that
-// is the thing that is wrong. The only lever left is to measure the shortfall
-// at runtime and let the shell overflow the viewport by it: a position:fixed
-// element is allowed to PAINT past the viewport edge, it simply can't scroll
-// there — which is precisely what a non-scrolling app shell wants.
+// `height:100%`, `100dvh` and `100vh` all measured the same 873 — every unit
+// reports the layout viewport, and the layout viewport is the thing that is
+// wrong. Growing the shell past it was tried and measured too: the ChatBar
+// then LAID OUT correctly (top edge at 932-44-105) but painted only down to
+// 873, its bottom 14px cut off. iOS renders backgrounds into that strip and
+// clips content out of it.
 //
-// Applied to <body> (base.css), so #root, AppFrame, every screen's
-// `inset:0` background layer, the overlay scrims and the bottom-anchored
-// ChatBar all inherit the correction from one place.
+// So the strip is not space the app can use — it can only be coloured. The
+// measurement below is what lets the app treat it as a physical edge it does
+// not own: --chatbar-bottom (tokens.css) lifts the bottom-anchored UI clear
+// of it, Profile's bottom glow ends above it, and chromeColor.ts paints it —
+// via body's background, the one thing that does reach — to match the bottom
+// edge of whatever surface is on screen, so the two read as one surface.
 
 /** What the fix needs to know about the window — injected so it stays pure. */
 export interface ViewportMetrics {

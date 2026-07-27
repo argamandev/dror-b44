@@ -17,6 +17,15 @@
      bar never lands under the indicator. Everything that has to clear the
      bar (the chat + world scroll lists, the toast) offsets from this rather
      than re-deriving it, so they can't drift apart. --kb-inset (Wave 4) is
-     composed on top by each consumer. */
-  --chatbar-bottom:max(44px, var(--bottom-inset));
+     composed on top by each consumer.
+     On a device that withholds a strip at the bottom (--shell-gap, see
+     src/ui/shellGap.ts) the frame stops short of the physical edge, so the
+     design margin is measured from the wrong place — 44px inside the frame
+     would leave the bar 44 + the strip above the real bottom, and iOS clips
+     anything reaching into the strip anyway. Subtracting the strip keeps the
+     bar the SAME distance from the physical edge as everywhere else, with
+     12px of frame always left below it so the rounded corner never lands on
+     the seam. --shell-gap is 0 on every device without the quirk, where this
+     collapses back to the plain max(). */
+  --chatbar-bottom:max(12px, calc(max(44px, var(--bottom-inset)) - var(--shell-gap, 0px)));
 }

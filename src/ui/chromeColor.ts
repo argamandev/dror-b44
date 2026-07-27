@@ -1,4 +1,5 @@
 import type { Overlay, Screen } from '@/state/useAppState';
+import { DRAWER_WIDTH_PCT } from '@/overlays/MenuDrawer';
 
 // Wave 4 Issue A ("dynamic chrome blending"): the founder's iPhone screenshot
 // showed a light band above Home's gradient under the status bar, and
@@ -135,6 +136,47 @@ const MENU_SPEC: ScreenColorSpec = { fg: { r: 107, g: 113, b: 246, a: 0.2 }, bg:
 // (0.55 for most, 0.62 for RecordOverlay.)
 const OVERLAY_DARK = '#4a4a52';
 
+// ---- The bottom strip (src/ui/shellGap.ts) ----
+//
+// Same idea as everything above, at the other edge. On a device that
+// withholds a strip below the app shell, body's background is the one thing
+// that still paints there, so it has to carry the BOTTOM edge of whatever
+// surface is on screen — otherwise the strip reads as a block stuck to the
+// bottom of the app instead of part of it. Where the top table takes each
+// gradient's peak stop, this one takes the flat base every screen's gradient
+// has faded to by the time it reaches the bottom (Profile's bottom glow is
+// lifted clear of the strip for exactly this reason, so it qualifies too).
+const SCREEN_STRIP: Record<ChromeScreen, string> = {
+  home: '#faf8fa',
+  profile: '#faf8fa',
+  world: '#faf8fa',
+  chat: '#fbfafb',
+  draft: '#fbfafb',
+  login: '#faf8fa',
+};
+
+// The menu is the one surface that is two surfaces: the ivory panel over the
+// right DRAWER_WIDTH_PCT of the column, the dimmed app peeking on the left. A
+// flat color would break the seam under one or the other, so the strip is
+// split at the same percentage the panel is. Left: the scrim
+// (rgba(23,23,27,0.42), MenuDrawer) over a screen's #faf8fa base. Right: the
+// panel's ivory, its dawn glow long since faded at this height.
+const MENU_PEEK = blendOver({ r: 23, g: 23, b: 27, a: 0.42 }, '#faf8fa');
+const MENU_PANEL = '#fbf6ef';
+const MENU_STRIP = `linear-gradient(to right, ${MENU_PEEK} 0 ${100 - DRAWER_WIDTH_PCT}%, ${MENU_PANEL} ${100 - DRAWER_WIDTH_PCT}% 100%)`;
+
+/**
+ * What to paint in the strip below the shell for a given (screen, overlay)
+ * pair — a CSS background value, so it can be a gradient. Pure, no DOM.
+ */
+export function computeStripBackground(screen: ChromeScreen, overlay: Overlay | null): string {
+  if (overlay === 'menu') return MENU_STRIP;
+  // Every other overlay lays its scrim across the whole frame, so the strip
+  // continues it.
+  if (overlay) return OVERLAY_DARK;
+  return SCREEN_STRIP[screen];
+}
+
 /** Computes the top-of-viewport color for a given (screen, overlay) pair — pure, no DOM access. */
 export function computeChromeColor(screen: ChromeScreen, overlay: Overlay | null): string {
   if (overlay === 'menu') return blendOver(MENU_SPEC.fg, MENU_SPEC.bg);
@@ -156,4 +198,7 @@ export function setChromeColor(screen: ChromeScreen, overlay: Overlay | null): v
   document.documentElement.style.backgroundColor = color;
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', color);
+  // The other edge: body sits UNDER the frame, so this is invisible except in
+  // the strip the frame cannot reach (src/ui/shellGap.ts).
+  document.body.style.background = computeStripBackground(screen, overlay);
 }

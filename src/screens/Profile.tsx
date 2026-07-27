@@ -123,11 +123,16 @@ const rowTextStyle: CSSProperties = { minWidth: 0 };
 const rowMetaStyle: CSSProperties = { fontSize: 11.5, color: '#a9a49d', letterSpacing: '0.01em' };
 const rowTitleStyle: CSSProperties = { fontSize: 15.5, fontWeight: 600, color: '#2b2b30', marginTop: 7 };
 
+// Lifted clear of the strip iOS withholds at the bottom (src/ui/shellGap.ts,
+// 0 on every device without the quirk): the glow is at its STRONGEST along
+// its bottom edge, and the strip can only be painted one flat colour. Ending
+// the glow above it leaves the frame's last rows at the flat base colour the
+// strip is painted with, so the two meet with no seam.
 const bottomGlowStyle: CSSProperties = {
   position: 'absolute',
   left: 0,
   right: 0,
-  bottom: 0,
+  bottom: 'var(--shell-gap, 0px)',
   height: 225,
   zIndex: 3,
   pointerEvents: 'none',
