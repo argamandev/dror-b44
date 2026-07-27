@@ -217,8 +217,17 @@ export function useVoiceChat({ patientId }: UseVoiceChatArgs): UseVoiceChat {
   // off. So a retry is just clearing the error and listening again, once the
   // user has actually fixed whatever blocked it (e.g. flipped the iOS system
   // mic toggle back on) — no overlay remount/reload needed.
+  //
+  // Fix round 1 — re-entrancy: a rapid double-tap of the retry button fires
+  // two synchronous calls before React re-renders to hide/disable it. Since
+  // there's no `await` in startListening() to race against, wantListeningRef
+  // (set true at its very start, and only ever false again while there's
+  // genuinely no attempt in flight — see its other call sites) doubles as the
+  // guard: the second tap sees it already true and bails, instead of
+  // creating a second SpeechRecognition instance that orphans the first
+  // (still-listening) one with nothing left to stop it.
   function retryMic() {
-    if (closedRef.current) return;
+    if (closedRef.current || wantListeningRef.current) return;
     setMicErrorKind(null);
     startListening();
   }

@@ -126,6 +126,11 @@ export function useSessionRecorder(): SessionRecorder {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const wantRecognitionRef = useRef(false);
   const fatalErrorRef = useRef(false);
+  // Task W5.2 fix round 1: guards start() against overlapping invocations
+  // (e.g. a rapid double-tap of a retry button) — two concurrent calls would
+  // each open their own getUserMedia stream, the second silently overwriting
+  // streamRef/recorderRef and leaking the first (nothing left to stop it).
+  const startingRef = useRef(false);
 
   const supported = !!RecognitionCtor;
 
@@ -145,6 +150,27 @@ export function useSessionRecorder(): SessionRecorder {
   const setTranscriptBoth = useCallback((t: string) => {
     transcriptRef.current = t;
     setTranscript(t);
+  }, []);
+
+  // Stops the MediaRecorder and releases the getUserMedia stream's tracks.
+  // Shared by stop() (an intentional close) and rec.onerror's mic-access
+  // branch below (an async failure that can arrive well after start() already
+  // resolved with running=true) — Task W5.2 fix round 1: before this, that
+  // onerror branch only flipped state (micErrorKind/running) and left the
+  // still-live stream/recorder referenced by nothing else, so a retry's
+  // start() would overwrite streamRef/recorderRef with a fresh stream and
+  // leak the old one (and its mic indicator) forever.
+  const releaseMedia = useCallback(() => {
+    try {
+      recorderRef.current?.stop();
+    } catch {
+      /* ignore */
+    }
+    recorderRef.current = null;
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop()); // mic indicator must go off
+      streamRef.current = null;
+    }
   }, []);
 
   const createRecognition = useCallback((): SpeechRecognitionLike | null => {
@@ -171,6 +197,13 @@ export function useSessionRecorder(): SessionRecorder {
       // instead of leaving a fake "listening" UI ticking away, and stop the
       // recording outright (there is no audio to keep capturing).
       if (MIC_ACCESS_RECOGNITION_ERRORS.has(ev.error)) {
+        // Tear down fully — see releaseMedia's docstring above for why this
+        // can't be skipped just because recording is about to show as
+        // stopped: nothing else is holding a reference to this stream/
+        // recorder once this handler returns.
+        wantRecognitionRef.current = false;
+        recognitionRef.current = null;
+        releaseMedia();
         setMicErrorKind(classifyMicError(ev.error));
         stopTimer();
         setRunning(false);
@@ -193,7 +226,7 @@ export function useSessionRecorder(): SessionRecorder {
       }
     };
     return rec;
-  }, [setTranscriptBoth, stopTimer]);
+  }, [setTranscriptBoth, stopTimer, releaseMedia]);
 
   const stopRecognition = useCallback(() => {
     wantRecognitionRef.current = false;
@@ -225,62 +258,77 @@ export function useSessionRecorder(): SessionRecorder {
   }, []);
 
   const start = useCallback(async () => {
-    reset();
-
-    // No getUserMedia at all (rather than a call that would throw/reject) —
-    // classify it the same way a real rejection would be, via the sentinel,
-    // instead of letting `undefined.getUserMedia(...)` throw a generic
-    // TypeError that would otherwise land in the 'unknown' bucket.
-    if (!isMicSupported()) {
-      setMicErrorKind(classifyMicError(MIC_UNSUPPORTED));
-      return;
-    }
-
+    // Re-entrancy guard (Task W5.2 fix round 1) — see startingRef's docstring.
+    if (startingRef.current) return;
+    startingRef.current = true;
     try {
-      streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (err) {
-      streamRef.current = null;
-      // Mic denied/unavailable — surface precisely why instead of pretending to listen.
-      setMicErrorKind(classifyMicError(err));
-      return;
-    }
+      // Defense-in-depth: release any still-live stream/recorder/recognition
+      // from a previous attempt before requesting fresh ones. rec.onerror's
+      // mic-access branch already tears its own attempt down (see
+      // releaseMedia), but start() must never be the single point of failure
+      // for that invariant — nothing here should ever have a next attempt
+      // silently overwrite (and leak) a still-open stream.
+      stopRecognition();
+      releaseMedia();
+      reset();
 
-    try {
-      const recorder = new MediaRecorder(streamRef.current);
-      recorder.ondataavailable = () => {
-        /* chunks discarded this week — MediaRecorder is only kept running to
-           keep the mic hot and future-proof audio upload */
-      };
-      recorder.start();
-      recorderRef.current = recorder;
-    } catch {
-      recorderRef.current = null;
-    }
+      // No getUserMedia at all (rather than a call that would throw/reject) —
+      // classify it the same way a real rejection would be, via the sentinel,
+      // instead of letting `undefined.getUserMedia(...)` throw a generic
+      // TypeError that would otherwise land in the 'unknown' bucket.
+      if (!isMicSupported()) {
+        setMicErrorKind(classifyMicError(MIC_UNSUPPORTED));
+        return;
+      }
 
-    if (supported) {
-      wantRecognitionRef.current = true;
-      // iOS Safari can throw constructing/starting SpeechRecognition in edge
-      // states (e.g. Siri/Dictation disabled) — the mic/MediaRecorder above
-      // are already running and unaffected, so this must never become
-      // micError: only live transcription is unavailable.
       try {
-        const rec = createRecognition();
-        recognitionRef.current = rec;
-        rec?.start();
+        streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (err) {
+        streamRef.current = null;
+        // Mic denied/unavailable — surface precisely why instead of pretending to listen.
+        setMicErrorKind(classifyMicError(err));
+        return;
+      }
+
+      try {
+        const recorder = new MediaRecorder(streamRef.current);
+        recorder.ondataavailable = () => {
+          /* chunks discarded this week — MediaRecorder is only kept running to
+             keep the mic hot and future-proof audio upload */
+        };
+        recorder.start();
+        recorderRef.current = recorder;
       } catch {
-        wantRecognitionRef.current = false;
-        recognitionRef.current = null;
+        recorderRef.current = null;
+      }
+
+      if (supported) {
+        wantRecognitionRef.current = true;
+        // iOS Safari can throw constructing/starting SpeechRecognition in edge
+        // states (e.g. Siri/Dictation disabled) — the mic/MediaRecorder above
+        // are already running and unaffected, so this must never become
+        // micError: only live transcription is unavailable.
+        try {
+          const rec = createRecognition();
+          recognitionRef.current = rec;
+          rec?.start();
+        } catch {
+          wantRecognitionRef.current = false;
+          recognitionRef.current = null;
+          setTranscriptUnavailable(true);
+        }
+      } else {
+        // No SpeechRecognition API at all — recording still proceeds via
+        // MediaRecorder alone, just without a live transcript.
         setTranscriptUnavailable(true);
       }
-    } else {
-      // No SpeechRecognition API at all — recording still proceeds via
-      // MediaRecorder alone, just without a live transcript.
-      setTranscriptUnavailable(true);
-    }
 
-    startTimer();
-    setRunning(true);
-  }, [createRecognition, reset, startTimer, supported]);
+      startTimer();
+      setRunning(true);
+    } finally {
+      startingRef.current = false;
+    }
+  }, [createRecognition, reset, startTimer, supported, stopRecognition, releaseMedia]);
 
   const pause = useCallback(() => {
     stopRecognition();
@@ -320,34 +368,20 @@ export function useSessionRecorder(): SessionRecorder {
 
   const stop = useCallback(async () => {
     stopRecognition();
-    try {
-      recorderRef.current?.stop();
-    } catch {
-      /* ignore */
-    }
-    recorderRef.current = null;
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop()); // mic indicator must go off
-      streamRef.current = null;
-    }
+    releaseMedia();
     stopTimer();
     setRunning(false);
     return { seconds: secondsRef.current, transcript: transcriptRef.current };
-  }, [stopRecognition, stopTimer]);
+  }, [stopRecognition, releaseMedia, stopTimer]);
 
   // Safety net: release the mic/timer if the component unmounts mid-recording.
   useEffect(() => {
     return () => {
       stopRecognition();
-      try {
-        recorderRef.current?.stop();
-      } catch {
-        /* ignore */
-      }
-      streamRef.current?.getTracks().forEach((t) => t.stop());
+      releaseMedia();
       stopTimer();
     };
-  }, [stopRecognition, stopTimer]);
+  }, [stopRecognition, releaseMedia, stopTimer]);
 
   return {
     seconds,
