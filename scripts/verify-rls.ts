@@ -1,7 +1,7 @@
 // Privacy verification (scripted half) — run with:
 //   cat scripts/verify-rls.ts | npx base44 exec
 //
-// Proves, from the currently-authenticated account (sagi.arg@gmail.com):
+// Proves, from the currently-authenticated account (the founder's demo account):
 //   (a) Patients visible to this account are exactly the seeded/known set.
 //   (b) Entry.filter with a nonexistent patient_id returns empty.
 //   (c) Reading a Patient by a fabricated id returns nothing (throws/empty).

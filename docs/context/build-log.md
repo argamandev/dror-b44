@@ -21,8 +21,8 @@ Product/company predate this week (dror-ai.com); this repo and its backend are b
 ### Demo seed script + privacy verification
 
 - **`scripts/seed.ts`** (run via `cat scripts/seed.ts | npx base44 exec`, pre-authenticated as
-  the CLI user `sagi.arg@gmail.com` — the founder's own demo account; Deno required, already
-  installed at `C:\Users\Sagi\.deno` from Task 7). Seeds the four demo patients from the design
+  the CLI user — the founder's own demo account; Deno required, already installed locally
+  from Task 7). Seeds the four demo patients from the design
   mock (`Dror.dc.html` lines 565-589): איתי (18 sessions), נועה (12), דניאל (7), מיכל (23), where
   "sessions" = non-draft `summary` Entry count (`sessionCount()` in `src/api/format.ts`).
   Idempotent and **convergent**: a patient is matched on full name (first+last) exactly, falling

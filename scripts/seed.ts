@@ -1,7 +1,7 @@
 // Demo seed script — run with:
 //   cat scripts/seed.ts | npx base44 exec
 // (Deno + `base44` globals are provided by `base44 exec`; pre-authenticated as
-// the CLI user, sagi.arg@gmail.com — the founder's own demo account.)
+// the CLI user — the founder's own demo account.)
 //
 // Seeds the four patients from the design mock (Dror.dc.html lines 565-589):
 // איתי (18 sessions), נועה (12), דניאל (7), מיכל (23). "Sessions" = non-draft
