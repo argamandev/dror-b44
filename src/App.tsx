@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, type CSSProperties } from 'react';
 import { auth } from '@/api/data';
+import { unlockAudio } from '@/api/audioUnlock';
 import { fullName } from '@/api/format';
 import Login from '@/screens/Login';
 import Home from '@/screens/Home';
@@ -155,7 +156,15 @@ function AuthedApp({ user }: { user: User }) {
               onSearch={() => state.open('search')}
               onRecord={() => state.open('record')}
               onMenu={() => state.open('menu')}
-              onOrbClick={() => state.open('voice')}
+              onOrbClick={() => {
+                // Task W5.3: iOS only lets audio start from inside a user
+                // gesture, and by the time Dror has a reply to speak we are
+                // several awaits away from this tap. Priming the shared audio
+                // element + AudioContext here, synchronously, before opening
+                // the overlay, is what makes the voice loop audible on iPhone.
+                unlockAudio();
+                state.open('voice');
+              }}
             />
           ) : state.screen === 'profile' && state.activePatient ? (
             <Profile
@@ -275,6 +284,7 @@ function AuthedApp({ user }: { user: User }) {
         {state.overlay === 'voice' && (
           <VoiceOverlay
             patientId={undefined}
+            showToast={state.showToast}
             onClose={() => {
               // Mirrors the design mock's goHomeClose (line 726) — voice is
               // only ever opened from Home this week, so closing it always

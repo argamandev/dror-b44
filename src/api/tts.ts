@@ -1,11 +1,12 @@
 import { base44 } from './base44Client';
+import { getSharedAudioElement } from './audioUnlock';
 
 // Text-to-speech priority chain for the voice conversation overlay (Task 11,
 // controller resolution 2 — the brief's original VITE_ELEVENLABS_KEY plan was
 // amended to a server-side key so the key never reaches the browser):
 //   (a) the `tts` Deno function (base44/functions/tts/entry.ts), which calls
-//       ElevenLabs server-side and returns base64 mp3 — played through an
-//       `<audio>` element via a data: URI;
+//       ElevenLabs server-side and returns base64 mp3 — played through the
+//       shared `<audio>` element (src/api/audioUnlock.ts) via a data: URI;
 //   (b) if that function is unreachable, throws, or reports {error:'no_key'}
 //       (503 — ELEVENLABS_API_KEY not configured yet), fall back to the
 //       browser's built-in `speechSynthesis` with a Hebrew voice.
@@ -95,18 +96,41 @@ function speakBrowser(text: string, gen: number): Promise<SpeakResult> {
   });
 }
 
-function playAudioB64(audioB64: string, mime: string, gen: number): Promise<SpeakResult> {
+// Task W5.3: plays through the ONE shared <audio> element rather than a fresh
+// `new Audio()` per reply. On iOS a per-reply element is created deep inside
+// this async chain — far from the tap that started it — and is therefore never
+// allowed to play; the shared element was blessed by that tap (see
+// audioUnlock.ts) and stays playable for the rest of the session. Because the
+// element outlives each reply, every listener it gets here is also cleared
+// again on finish, so a later reply can never be ended by an earlier one's
+// handlers.
+function playAudioB64(text: string, audioB64: string, mime: string, gen: number): Promise<SpeakResult> {
+  const audio = getSharedAudioElement();
+  // No <audio> in this environment at all — the browser voice is the honest
+  // fallback, same as when the tts function is unreachable.
+  if (!audio) return speakBrowser(text, gen);
+
   return new Promise((resolve) => {
     if (gen !== generation) {
       resolve({ mode: 'eleven' });
       return;
     }
-    const audio = new Audio(`data:${mime};base64,${audioB64}`);
+
+    // Sharing one element means a reply that is still holding it has to be
+    // settled before this one takes it over: its listeners are about to be
+    // replaced, so nothing else would ever resolve its promise. (useVoiceChat
+    // awaits each reply, so this is defence rather than a live case — but a
+    // silently un-resolving await would hang the whole loop.)
+    const previous = activeStop;
+    activeStop = null;
+    previous?.();
 
     let settled = false;
     const finish = () => {
       if (settled) return;
       settled = true;
+      if (audio.onended === finish) audio.onended = null;
+      if (audio.onerror === finish) audio.onerror = null;
       if (activeStop === stopThis) activeStop = null;
       resolve({ mode: 'eleven' });
     };
@@ -124,6 +148,8 @@ function playAudioB64(audioB64: string, mime: string, gen: number): Promise<Spea
     // Playback failing mid-stream is treated the same as it ending — there's
     // no second fallback once we're already in the (a) branch's audio path.
     audio.onerror = finish;
+    audio.muted = false;
+    audio.src = `data:${mime};base64,${audioB64}`;
     activeStop = stopThis;
     audio.play().catch(finish);
   });
@@ -153,7 +179,7 @@ export async function speakHebrew(text: string): Promise<SpeakResult> {
   }
 
   if (data?.audio_b64 && data.mime) {
-    return playAudioB64(data.audio_b64, data.mime, gen);
+    return playAudioB64(text, data.audio_b64, data.mime, gen);
   }
   return speakBrowser(text, gen);
 }

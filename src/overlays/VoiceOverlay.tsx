@@ -21,9 +21,15 @@ interface VoiceOverlayProps {
    */
   patientId?: string;
   onClose: () => void;
+  /** App-level toast — the voice loop raises one only when a transcript fails (Task W5.3). */
+  showToast: (text: string) => void;
 }
 
-const UNSUPPORTED_CAPTION = 'שיחה קולית נתמכת בכרום בלבד כרגע';
+// Task W5.3: no longer "Chrome only" — a device without SpeechRecognition now
+// records and transcribes server-side instead. This caption is left for the
+// genuinely last case: no voice input engine of any kind (no MediaRecorder, or
+// no getUserMedia at all).
+const UNSUPPORTED_CAPTION = 'שיחה קולית אינה זמינה בדפדפן הזה';
 // Wave 4 Issue C: iOS Safari fires 'service-not-allowed' when Siri/Dictation
 // is unavailable even though mic permission is granted — a distinct message
 // from the mic-error guidance below (getMicGuidance), since the fix (and the
@@ -136,8 +142,8 @@ const micRetryBtnStyle: CSSProperties = {
   cursor: 'pointer',
 };
 
-export default function VoiceOverlay({ patientId, onClose }: VoiceOverlayProps) {
-  const voice = useVoiceChat({ patientId });
+export default function VoiceOverlay({ patientId, onClose, showToast }: VoiceOverlayProps) {
+  const voice = useVoiceChat({ patientId, showToast });
 
   const handleClose = () => {
     voice.stop();
@@ -156,6 +162,10 @@ export default function VoiceOverlay({ patientId, onClose }: VoiceOverlayProps) 
   const notice = !voice.supported ? UNSUPPORTED_CAPTION : voice.speechUnavailable ? SPEECH_UNAVAILABLE_CAPTION : null;
   const showLive =
     voice.supported && !voice.micErrorKind && !voice.speechUnavailable && voice.lastUserText.trim().length > 0;
+  // Task W5.3 requirement 4: a quiet state hint under the orb (מקשיב… /
+  // חושב… / עונה…) so the loop is legible — on the recorded engine there are
+  // no interim words appearing to show that something is happening.
+  const showPhaseCaption = voice.supported && !voice.micErrorKind && !voice.speechUnavailable;
 
   return (
     <div style={backdropStyle}>
@@ -165,7 +175,9 @@ export default function VoiceOverlay({ patientId, onClose }: VoiceOverlayProps) 
         </svg>
       </div>
       <div style={contentStyle}>
-        <div style={orbWrapStyle}>
+        {/* Tapping the orb ends the utterance now (recorded engine); on the
+            live engine the recognizer still decides, and this is inert. */}
+        <div onClick={voice.endUtterance} style={orbWrapStyle}>
           <div style={haloStyle} />
           <dror-orb size="210" state={orbState} />
         </div>
@@ -187,6 +199,7 @@ export default function VoiceOverlay({ patientId, onClose }: VoiceOverlayProps) 
           ) : (
             <>
               {notice && <div style={captionStyle}>{notice}</div>}
+              {showPhaseCaption && <div style={captionStyle}>{voice.caption}</div>}
               {showLive && (
                 <div dir="rtl" style={liveTextStyle}>
                   {voice.lastUserText}
