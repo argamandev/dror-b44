@@ -109,6 +109,31 @@ describe('docStatusLine', () => {
       expect(docStatusLine('אישור של טיפול')).toBe(DOC_STATUS_FALLBACK);
     });
   });
+
+  // Round-3 fix: round-2 only checked words[1] (the 2nd word) for ambiguity,
+  // reasoning it was the word right before the construct default's mutation
+  // point — but the construct default actually mutates the LAST word, not the
+  // 2nd. A 3+-word phrase can have an unambiguous 2nd word and an ambiguous
+  // LAST word, slipping past the round-2 gate straight into the construct
+  // branch, which then prefixed ה onto that ambiguous last word and produced
+  // invalid Hebrew (e.g. "מסמך הפניה לרופא" -> "מסמך הפניה הלרופא"). Now every
+  // word from index 1 onward is checked, not just the 2nd.
+  describe('3+-word types with an ambiguous word past the 2nd (round-3 fix)', () => {
+    it('falls back to the generic line — reviewer probe "מסמך הפניה לרופא" (unambiguous 2nd word, ambiguous LAST word ל)', () => {
+      expect(docStatusLine('מסמך הפניה לרופא')).toBe(DOC_STATUS_FALLBACK);
+    });
+
+    it('falls back to the generic line — reviewer probe "מכתב המלצה לפסיכולוג" (unambiguous 2nd word, ambiguous LAST word ל)', () => {
+      expect(docStatusLine('מכתב המלצה לפסיכולוג')).toBe(DOC_STATUS_FALLBACK);
+    });
+
+    it('applies the safe construct default when every trailing word is unambiguous, even 3 words deep — "סיכום פגישת היכרות" (regression guard)', () => {
+      // פגישת starts with פ, היכרות starts with ה — neither is ל/ב/מ/של, so
+      // this is safely a construct chain; ה before the last word doubles
+      // היכרות's own ה, same as the החלטה case above.
+      expect(docStatusLine('סיכום פגישת היכרות')).toBe('דרור מנסח את סיכום פגישת ההיכרות…');
+    });
+  });
 });
 
 describe('SUMMARY_STATUS_LINE', () => {

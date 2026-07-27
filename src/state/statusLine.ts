@@ -36,14 +36,24 @@ const CURATED_DEFINITE_TYPES: Record<string, string> = {
   'סיכום טיפול': 'סיכום הטיפול',
 };
 
-// A 2nd word matching this is the ambiguous class from the comment above:
-// it MIGHT be a bound preposition (in which case ה-before-last-word would be
+// A word matching this is the ambiguous class from the comment above: it
+// MIGHT be a bound preposition (in which case ה-before-last-word would be
 // wrong) or might just be an ordinary word that happens to start the same way
 // (in which case ה-before-last-word would be right) — with no way to tell
 // which from the word alone. Rather than guess, docStatusLine falls back to
-// the generic line for these (unless the whole phrase is one of the curated
-// exceptions above, checked first).
-function isAmbiguousSecondWord(word: string): boolean {
+// the generic line whenever ANY word from index 1 onward is ambiguous (unless
+// the whole phrase is one of the curated exceptions above, checked first).
+//
+// Round-2 only gated words[1] (the 2nd word), reasoning that it's the word
+// right before the construct default's mutation point. Round-3 re-review
+// found the gap that leaves: the construct default actually mutates the LAST
+// word, not the 2nd — so a 3+-word phrase with an unambiguous 2nd word but an
+// ambiguous LAST word slipped through, e.g. "מסמך הפניה לרופא" (words[1] =
+// "הפניה", unambiguous) still let the construct default prefix ה onto
+// words[2] = "לרופא", producing the invalid "מסמך הפניה הלרופא". So every
+// word from index 1 on is now checked, not just the one right before the
+// mutation point.
+function isAmbiguousWord(word: string): boolean {
   return word === 'של' || /^[לבמ]/.test(word);
 }
 
@@ -61,17 +71,21 @@ function isAmbiguousSecondWord(word: string): boolean {
 //    "ההחלטה"), which is correct Hebrew rather than an accidental
 //    duplicate. So this prefix has no exception for a type whose own first
 //    letter happens to be ה.
-// 3. Multi-word, not curated, 2nd word ambiguous (isAmbiguousSecondWord
-//    above): null — refuse to guess, let the generic line stand in.
-// 4. Multi-word, otherwise (a construct chain, סמיכות): insert ה before the
-//    LAST word — "סיכום שלב" -> "סיכום השלב", "מכתב תודה" -> "מכתב התודה".
+// 3. Multi-word, not curated, ANY word from index 1 onward is ambiguous
+//    (isAmbiguousWord above): null — refuse to guess, let the generic line
+//    stand in. Checking every trailing word (not just the one right before
+//    the last-word mutation point) is what closes the round-3 gap above.
+// 4. Multi-word, otherwise — every word from index 1 on is unambiguous, so
+//    it's safely a construct chain (סמיכות): insert ה before the LAST word
+//    — "סיכום שלב" -> "סיכום השלב", "סיכום פגישת היכרות" -> "סיכום פגישת
+//    ההיכרות" (last word היכרות doubles its own ה, same as case 2 above).
 function definiteType(trimmed: string): string | null {
   const words = trimmed.split(/\s+/);
   const normalized = words.join(' ');
   const curated = CURATED_DEFINITE_TYPES[normalized];
   if (curated) return curated;
   if (words.length === 1) return `ה${words[0]}`;
-  if (isAmbiguousSecondWord(words[1])) return null;
+  if (words.slice(1).some(isAmbiguousWord)) return null;
   const lastIndex = words.length - 1;
   return [...words.slice(0, lastIndex), `ה${words[lastIndex]}`].join(' ');
 }
