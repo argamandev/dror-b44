@@ -13,41 +13,65 @@ export const DOC_STATUS_FALLBACK = 'דרור מנסח את המסמך…';
 /** Longest free-typed type we'll still read aloud in the status line before falling back. */
 const MAX_TYPE_LENGTH = 30;
 
-// A second (or later) word starting with one of these reads as a bound
-// preposition (ל/ב/מ physically attach as the word's own first letter) or the
-// standalone "של" ("of") — e.g. "לקופת" in "מכתב לקופת חולים". For these, the
-// phrase is NOT a simple two-word construct chain, so making it definite
-// belongs on the FIRST word instead (round-1 fix — see docStatusLine below).
-const PREPOSITION_LETTERS = /^[לבמ]/;
+// Round-1 fix tried to detect a bound preposition (ל/ב/מ physically attach as
+// a word's own first letter, e.g. "לקופת" in "מכתב לקופת חולים") purely by
+// looking at the 2nd word's first letter(s). Round-2 review disproved that:
+// ל/ב/מ/ש are ALSO the ordinary root-initial letters of countless unrelated
+// nouns — "בקשה" (request), "מטופל" (patient), "מפגש" (meeting), "שלב"
+// (stage) — so the same letter-level check misfired on real free-typed types
+// ("אישור מטופל" -> wrongly "האישור מטופל"). There is no local (word-level)
+// signal that reliably tells a bound preposition apart from a word's own
+// first letter — the two are genuinely undecidable without real parsing —
+// and the brand voice must never surface broken Hebrew while guessing. So
+// the exact multi-word phrases known to need the FIRST-word placement are
+// hardcoded below; every other multi-word type either takes the safe
+// construct-chain default (ה before the last word) or, when the 2nd word's
+// first letter(s) make that default itself unreliable, falls back to the
+// generic מסמך line rather than risk a wrong guess.
+const CURATED_DEFINITE_TYPES: Record<string, string> = {
+  'אישור טיפול': 'אישור הטיפול',
+  'מכתב לקופת חולים': 'המכתב לקופת חולים',
+  'מסמך אינטייק': 'מסמך האינטייק',
+  'חוות דעת': 'חוות הדעת',
+  'סיכום טיפול': 'סיכום הטיפול',
+};
 
-function startsLikePreposition(word: string): boolean {
-  return PREPOSITION_LETTERS.test(word) || word.startsWith('של');
+// A 2nd word matching this is the ambiguous class from the comment above:
+// it MIGHT be a bound preposition (in which case ה-before-last-word would be
+// wrong) or might just be an ordinary word that happens to start the same way
+// (in which case ה-before-last-word would be right) — with no way to tell
+// which from the word alone. Rather than guess, docStatusLine falls back to
+// the generic line for these (unless the whole phrase is one of the curated
+// exceptions above, checked first).
+function isAmbiguousSecondWord(word: string): boolean {
+  return word === 'של' || /^[לבמ]/.test(word);
 }
 
-// Marks `type` definite by inserting ה in the grammatically correct spot,
-// then wraps it in the "דרור מנסח את …" status line. Three cases (round-1
-// fix — the original always-prefix-the-whole-phrase rule was wrong for
-// multi-word types, e.g. it produced "החוות דעת" for "חוות דעת" instead of
-// the correct "חוות הדעת"):
+// Marks `type` definite by inserting ה in the grammatically correct spot, or
+// returns null when doing so safely isn't possible (docStatusLine then uses
+// the generic fallback). Checked in order:
 //
-// 1. Single word: prefix ה onto that word. Hebrew nouns from the
-//    הפעיל/הפעלה pattern (החלטה, הצעה, הסבר, הפניה…) start with ה as part of
-//    the word itself, not as a definite article — making them definite still
-//    takes the article, DOUBLING the ה ("החלטה" -> "ההחלטה"), which is
-//    correct Hebrew rather than an accidental duplicate. So this prefix has
-//    no exception for a type whose own first letter happens to be ה.
-// 2. Multi-word, 2nd word reads like a bound preposition (see
-//    startsLikePreposition above): prefix ה onto the FIRST word only —
-//    "מכתב לקופת חולים" -> "המכתב לקופת חולים" (the rest is an idiomatic
-//    unit — "קופת חולים", the health fund — left untouched).
-// 3. Multi-word, otherwise (a construct chain, סמיכות): insert ה before the
-//    LAST word — "חוות דעת" -> "חוות הדעת", "אישור טיפול" -> "אישור הטיפול".
-function definiteType(trimmed: string): string {
+// 1. One of the curated exact phrases above (docS1's shipped chip labels,
+//    plus the brief's own "סיכום טיפול" example) — each has a known-correct
+//    definite form, some of which need the FIRST word ("מכתב לקופת חולים").
+// 2. Single word: prefix ה onto that word — always safe. Hebrew nouns from
+//    the הפעיל/הפעלה pattern (החלטה, הצעה, הסבר, הפניה…) start with ה as
+//    part of the word itself, not as a definite article — making them
+//    definite still takes the article, DOUBLING the ה ("החלטה" ->
+//    "ההחלטה"), which is correct Hebrew rather than an accidental
+//    duplicate. So this prefix has no exception for a type whose own first
+//    letter happens to be ה.
+// 3. Multi-word, not curated, 2nd word ambiguous (isAmbiguousSecondWord
+//    above): null — refuse to guess, let the generic line stand in.
+// 4. Multi-word, otherwise (a construct chain, סמיכות): insert ה before the
+//    LAST word — "סיכום שלב" -> "סיכום השלב", "מכתב תודה" -> "מכתב התודה".
+function definiteType(trimmed: string): string | null {
   const words = trimmed.split(/\s+/);
+  const normalized = words.join(' ');
+  const curated = CURATED_DEFINITE_TYPES[normalized];
+  if (curated) return curated;
   if (words.length === 1) return `ה${words[0]}`;
-  if (startsLikePreposition(words[1])) {
-    return [`ה${words[0]}`, ...words.slice(1)].join(' ');
-  }
+  if (isAmbiguousSecondWord(words[1])) return null;
   const lastIndex = words.length - 1;
   return [...words.slice(0, lastIndex), `ה${words[lastIndex]}`].join(' ');
 }
@@ -55,5 +79,6 @@ function definiteType(trimmed: string): string {
 export function docStatusLine(type: string | undefined): string {
   const trimmed = (type ?? '').trim();
   if (!trimmed || trimmed.length > MAX_TYPE_LENGTH) return DOC_STATUS_FALLBACK;
-  return `דרור מנסח את ${definiteType(trimmed)}…`;
+  const result = definiteType(trimmed);
+  return result === null ? DOC_STATUS_FALLBACK : `דרור מנסח את ${result}…`;
 }

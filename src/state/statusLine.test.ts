@@ -64,11 +64,49 @@ describe('docStatusLine', () => {
       expect(docStatusLine('סיכום טיפול')).toBe('דרור מנסח את סיכום הטיפול…');
     });
 
-    it('prefixes ה onto the FIRST word instead when the 2nd word reads as a bound preposition — "מכתב לקופת חולים" chip', () => {
+    it('prefixes ה onto the FIRST word instead — "מכתב לקופת חולים" chip (curated exact match, round-2)', () => {
       // "לקופת" is ל + קופת ("to the fund of") — a pure last-word ה would
       // give the awkward "מכתב לקופת החולים"; prefixing the first word
-      // instead reads naturally: "the letter to Kupat Holim".
+      // instead reads naturally: "the letter to Kupat Holim". Round-1 got
+      // this via a letter-level heuristic on the 2nd word; round-2 replaced
+      // that (it overgeneralized — see the block below) with an exact
+      // curated lookup for this specific known-correct phrase.
       expect(docStatusLine('מכתב לקופת חולים')).toBe('דרור מנסח את המכתב לקופת חולים…');
+    });
+  });
+
+  // Round-2 fix: round-1's heuristic — "2nd word starts with ל/ב/מ, or is
+  // the word של, so prefix ה onto the FIRST word instead" — overgeneralized.
+  // ל/ב/מ/ש are ALSO the ordinary root-initial letters of countless unrelated
+  // nouns (בקשה request, מטופל patient, מפגש meeting, שלב stage), so the same
+  // check misfired on real free-typed types, e.g. wrongly producing "האישור
+  // מטופל". There's no reliable local signal that tells a bound preposition
+  // apart from a word's own first letter, so non-curated multi-word types now
+  // either take the safe construct-chain default (ה before the last word,
+  // when the 2nd word ISN'T one of the ambiguous letters) or fall back to the
+  // generic line (when it is) — the brand voice must never read as broken
+  // Hebrew, so an ambiguous case is refused rather than guessed.
+  describe('non-curated multi-word types (round-2 fix)', () => {
+    it('applies the safe construct default when the 2nd word only coincidentally starts with ש, not an ambiguous letter — "סיכום שלב"', () => {
+      // "שלב" (stage) starts with ש (not ל/ב/מ) and isn't the word "של"
+      // itself, so it's unambiguous — the construct default applies safely.
+      expect(docStatusLine('סיכום שלב')).toBe('דרור מנסח את סיכום השלב…');
+    });
+
+    it('falls back to the generic line — reviewer probe "אישור מטופל" (2nd word starts with מ)', () => {
+      expect(docStatusLine('אישור מטופל')).toBe(DOC_STATUS_FALLBACK);
+    });
+
+    it('falls back to the generic line — reviewer probe "מכתב בקשה" (2nd word starts with ב)', () => {
+      expect(docStatusLine('מכתב בקשה')).toBe(DOC_STATUS_FALLBACK);
+    });
+
+    it('falls back to the generic line — reviewer probe "סיכום מפגש" (2nd word starts with מ)', () => {
+      expect(docStatusLine('סיכום מפגש')).toBe(DOC_STATUS_FALLBACK);
+    });
+
+    it('falls back to the generic line when the 2nd word is the whole word "של"', () => {
+      expect(docStatusLine('אישור של טיפול')).toBe(DOC_STATUS_FALLBACK);
     });
   });
 });
