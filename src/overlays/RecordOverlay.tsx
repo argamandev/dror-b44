@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { createEntry, createPatient, type Patient } from '@/api/data';
+import { createPatient, type Patient } from '@/api/data';
 import { fullName, fmtTimer } from '@/api/format';
 import {
   useSessionRecorder,
@@ -14,15 +14,15 @@ import { getMicGuidance } from '@/hooks/micCopy';
 // 709) — there is no method choice like FlowOverlay's step 1. "סיום" stops
 // the recorder and moves to an assign-to-patient phase that mirrors
 // SearchOverlay's search/inline-create UI almost exactly; the row sub-label
-// here is "שיוך ההקלטה" rather than a session count, since patient session
+// here is "סיכום הפגישה" rather than a session count, since patient session
 // counts aren't loaded for this list (avoids an N+1 load just for a label).
-// Assigning (existing or freshly-created patient) saves the recording as a
-// `rec` Entry, then — when there is a transcript to work from — hands it to
-// the patient's own summary flow (FlowOverlay, seeded at its guide step), so
-// a recording started from the home orb ends in exactly the same structured
-// summary as one started from the patient's profile, through the same code.
-// An empty transcript (unsupported browser, or a mic error that still got
-// assigned) just saves the entry and returns to the profile.
+// Picking a patient (existing or freshly-created) hands the transcript to
+// that patient's own summary flow (FlowOverlay, seeded at its guide step),
+// so a recording started from the home orb ends in exactly the same
+// structured summary as one started from the patient's profile, through the
+// same code. The recording is never filed as an entry of its own — the
+// summary is what belongs in the file, and the therapist reviews and saves
+// it at the end of that flow.
 type RecordPhase = 'rec' | 'assign';
 
 interface RecordOverlayProps {
@@ -282,17 +282,16 @@ export default function RecordOverlay({
   const recorder = useSessionRecorder();
 
   const [phase, setPhase] = useState<RecordPhase>('rec');
-  const [saved, setSaved] = useState<{ seconds: number; transcript: string }>({ seconds: 0, transcript: '' });
+  // The finished recording's text, held until a patient is picked for it.
+  const [saved, setSaved] = useState('');
   const [q, setQ] = useState('');
   const [first, setFirst] = useState('');
   const [last, setLast] = useState('');
   const [busy, setBusy] = useState(false);
 
   // Tracks whether the overlay has been closed (X or unmount) so an in-flight
-  // summarizeSession() (or a slow createEntry) that resolves afterwards can be
-  // dropped silently instead of navigating/toasting on a screen the user
-  // already left — the rec Entry itself is already saved by then, only the
-  // local navigation/toast is what gets dropped. Mirrors FlowOverlay's pattern.
+  // openPatient() that resolves afterwards can be dropped silently instead of
+  // navigating on a screen the user already left. Mirrors FlowOverlay's pattern.
   const closedRef = useRef(false);
   // Guards recorder.start() against StrictMode's dev-only double-invoke of
   // this mount effect (setup->cleanup->setup) — without it, two concurrent
@@ -334,7 +333,7 @@ export default function RecordOverlay({
     const result = await recorder.stop();
     if (closedRef.current) return;
     if (result.transcriptionFailed) showToast(RECORDED_TRANSCRIPTION_FAILED_TOAST);
-    setSaved(result);
+    setSaved(result.transcript);
     setPhase('assign');
   };
 
@@ -357,40 +356,15 @@ export default function RecordOverlay({
   };
 
   // Shared by both assign paths (picking an existing result, or creating a
-  // new patient inline) — saves the rec Entry, then offers the bonus
-  // auto-summary when there's a transcript to work from.
+  // new patient inline) — makes the patient active and continues straight
+  // into their own summary flow with the transcript. The recording itself is
+  // never filed as an entry: what belongs in the file is the summary, which
+  // the therapist reviews and saves at the end of that flow.
   const finishAssign = async (patient: Patient) => {
     setBusy(true);
-    const { seconds, transcript } = saved;
-    try {
-      await createEntry({
-        patient_id: patient.id,
-        type: 'rec',
-        title: 'הקלטת פגישה',
-        entry_date: new Date().toISOString(),
-        body: 'הקלטה באורך ' + fmtTimer(seconds),
-        is_draft: false,
-        duration_seconds: seconds,
-        transcript,
-      });
-    } catch {
-      if (closedRef.current) return;
-      showToast(SAVE_ERROR);
-      setBusy(false);
-      return;
-    }
-
-    if (closedRef.current) return;
-
-    // Make the patient active, then continue in their own summary flow — the
-    // drafting itself lives there and only there, so both entry points share
-    // one implementation and one result. A recording that produced no text
-    // continues there too (on the notes step), rather than dead-ending as a
-    // saved recording with no summary.
-    showToast('ההקלטה נשמרה בעולם של ' + fullName(patient));
     await openPatient(patient.id);
     if (closedRef.current) return;
-    startSummaryFlow(transcript);
+    startSummaryFlow(saved);
   };
 
   const handleAssignExisting = (patient: Patient) => {
@@ -453,7 +427,7 @@ export default function RecordOverlay({
           <>
             <div style={statusTextStyle}>
               {recorder.running
-                ? 'הקלטת הפגישה החלה. לאחר סיומה נתאים אותה למטופל הייעודי.'
+                ? 'הקלטת הפגישה החלה. לאחר סיומה נבחר למי שייך סיכום הפגישה.'
                 : 'ההקלטה מושהית'}
             </div>
             <div style={recContentStyle}>
@@ -484,7 +458,7 @@ export default function RecordOverlay({
 
       {phase === 'assign' && (
         <div style={panelStyle}>
-          <div style={titleStyle}>לאיזה מטופל לשייך את ההקלטה?</div>
+          <div style={titleStyle}>לאיזה מטופל סיכום הפגישה צריך להשתייך?</div>
           <div style={inputWrapStyle}>
             <svg viewBox="0 0 24 24" fill="none" width={18} height={18} style={{ flex: 'none' }}>
               <circle cx={11} cy={11} r={7} stroke="#9a9ca1" strokeWidth={2} />
@@ -503,7 +477,7 @@ export default function RecordOverlay({
               {results.map((p) => (
                 <div key={p.id} onClick={() => handleAssignExisting(p)} className="pressable" style={rowStyle}>
                   <span style={rowNameStyle}>{fullName(p)}</span>
-                  <span style={rowSubStyle}>שיוך ההקלטה</span>
+                  <span style={rowSubStyle}>סיכום הפגישה</span>
                 </div>
               ))}
               {noMatch && (
@@ -526,7 +500,7 @@ export default function RecordOverlay({
                     />
                   </div>
                   <button type="button" onClick={handleCreateAndAssign} disabled={busy} className="pressable" style={addBtnStyle}>
-                    הוספת מטופל ושיוך
+                    הוספת מטופל וסיכום
                   </button>
                 </div>
               )}

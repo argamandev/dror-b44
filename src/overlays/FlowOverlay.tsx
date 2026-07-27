@@ -620,7 +620,7 @@ export default function FlowOverlay({
           <div style={stepWrapStyle}>
             {seededWithoutTranscript && (
               <div style={guideLabelStyle}>
-                ההקלטה נשמרה בתיק, אבל לא הצלחנו לתמלל אותה — אפשר לכתוב כאן את הנקודות מהפגישה ודרור ימשיך מכאן.
+                לא הצלחנו לתמלל את ההקלטה — אפשר לכתוב כאן את הנקודות מהפגישה ודרור ימשיך מכאן.
               </div>
             )}
             <textarea
