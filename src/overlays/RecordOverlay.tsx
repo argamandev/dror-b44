@@ -3,6 +3,7 @@ import { createEntry, createPatient, type Patient } from '@/api/data';
 import { fullName, fmtTimer } from '@/api/format';
 import { summarizeSession } from '@/api/ai';
 import { useSessionRecorder, TRANSCRIPT_UNAVAILABLE_NOTICE } from '@/hooks/useSessionRecorder';
+import { getMicGuidance } from '@/hooks/micCopy';
 import type { Draft } from '@/state/useAppState';
 
 // Ported verbatim from the design mock (lines 224-278, semantics 709/731-752).
@@ -127,11 +128,31 @@ const micErrorWrapStyle: CSSProperties = {
   justifyContent: 'center',
   padding: '0 40px',
 };
-const micErrorTextStyle: CSSProperties = {
+const micErrorContentStyle: CSSProperties = { textAlign: 'center', maxWidth: 320 };
+const micErrorHeadlineStyle: CSSProperties = {
+  fontFamily: 'Calibri,Assistant,sans-serif',
+  fontSize: 17,
+  fontWeight: 600,
+  color: '#ffffff',
+  lineHeight: 1.5,
+};
+const micErrorStepsStyle: CSSProperties = { marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 };
+const micErrorStepRowStyle: CSSProperties = {
+  fontSize: 14,
+  color: 'rgba(255,255,255,0.75)',
+  lineHeight: 1.5,
+};
+const micRetryBtnStyle: CSSProperties = {
+  marginTop: 22,
+  height: 46,
+  padding: '0 28px',
+  border: '1px solid rgba(255,255,255,0.35)',
+  borderRadius: 999,
+  background: 'rgba(255,255,255,0.14)',
+  color: '#ffffff',
   fontSize: 14.5,
-  color: 'rgba(255,255,255,0.85)',
-  textAlign: 'center',
-  lineHeight: 1.6,
+  fontWeight: 600,
+  cursor: 'pointer',
 };
 // Wave 4 Issue C: small, muted, non-blocking — recording continues underneath it.
 const transcriptUnavailableTextStyle: CSSProperties = {
@@ -319,6 +340,18 @@ export default function RecordOverlay({
     onClose();
   };
 
+  // Re-requests getUserMedia without reopening the overlay — e.g. once the
+  // therapist has flipped an iOS system toggle back on. Mirrors the mount
+  // effect's own start() call, including the same orphaned-overlay guard.
+  const handleRetryMic = () => {
+    recorder
+      .start()
+      .then(() => {
+        if (closedRef.current) recorder.stop().catch(() => {});
+      })
+      .catch(() => {});
+  };
+
   // Shared by both assign paths (picking an existing result, or creating a
   // new patient inline) — saves the rec Entry, then offers the bonus
   // auto-summary when there's a transcript to work from.
@@ -408,9 +441,23 @@ export default function RecordOverlay({
       </div>
 
       {phase === 'rec' &&
-        (recorder.micError ? (
+        (recorder.micErrorKind ? (
           <div style={micErrorWrapStyle}>
-            <div style={micErrorTextStyle}>אין גישה למיקרופון — אפשר לאשר גישה בדפדפן</div>
+            <div style={micErrorContentStyle}>
+              <div style={micErrorHeadlineStyle}>{getMicGuidance(recorder.micErrorKind).headline}</div>
+              <div style={micErrorStepsStyle}>
+                {getMicGuidance(recorder.micErrorKind).steps.map((step, i) => (
+                  <div key={i} style={micErrorStepRowStyle}>
+                    {step}
+                  </div>
+                ))}
+              </div>
+              {recorder.micErrorKind !== 'unsupported' && (
+                <button type="button" onClick={handleRetryMic} className="pressable" style={micRetryBtnStyle}>
+                  ניסיון חוזר
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           <>

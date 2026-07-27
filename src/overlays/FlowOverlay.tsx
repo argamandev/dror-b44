@@ -3,6 +3,8 @@ import type { Patient } from '@/api/data';
 import { fullName, fmtTimer } from '@/api/format';
 import { summarizeSession, draftDocument } from '@/api/ai';
 import { useSessionRecorder, TRANSCRIPT_UNAVAILABLE_NOTICE } from '@/hooks/useSessionRecorder';
+import { isMicSupported } from '@/hooks/micAccess';
+import { getMicGuidance } from '@/hooks/micCopy';
 
 // Ported verbatim from the design mock (lines 335-401 for the summary path,
 // 402-443 for the doc path, 342-352/444-452 for the shared chrome — step
@@ -32,7 +34,7 @@ const DRAFT_ERROR = 'דרור לא הצליח לנסח, נסו שוב';
 // TRANSCRIPT_UNAVAILABLE_NOTICE once the recording step is open) — hiding
 // the option on every non-Chrome browser defeated that resilience. Only omit
 // it entirely when there's no mic API at all to record with.
-const MIC_AVAILABLE = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+const MIC_AVAILABLE = isMicSupported();
 
 const backdropStyle: CSSProperties = {
   position: 'absolute',
@@ -119,12 +121,27 @@ const timerStyle: CSSProperties = {
   fontVariantNumeric: 'tabular-nums',
 };
 const recTextStyle: CSSProperties = { fontSize: 14.5, color: 'rgba(255,255,255,0.85)' };
-const micErrorTextStyle: CSSProperties = {
-  fontSize: 14.5,
-  color: 'rgba(255,255,255,0.85)',
-  textAlign: 'center',
-  lineHeight: 1.6,
-  padding: '0 8px',
+const micErrorContentStyle: CSSProperties = { textAlign: 'center', padding: '0 8px' };
+const micErrorHeadlineStyle: CSSProperties = {
+  fontFamily: 'Calibri,Assistant,sans-serif',
+  fontSize: 16,
+  fontWeight: 600,
+  color: '#ffffff',
+  lineHeight: 1.5,
+};
+const micErrorStepsStyle: CSSProperties = { marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 };
+const micErrorStepRowStyle: CSSProperties = { fontSize: 13.5, color: 'rgba(255,255,255,0.75)', lineHeight: 1.5 };
+const micRetryBtnStyle: CSSProperties = {
+  marginTop: 18,
+  height: 44,
+  padding: '0 26px',
+  border: '1px solid rgba(255,255,255,0.35)',
+  borderRadius: 999,
+  background: 'rgba(255,255,255,0.14)',
+  color: '#ffffff',
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: 'pointer',
 };
 // Wave 4 Issue C: small, muted, non-blocking — recording continues underneath it.
 const transcriptUnavailableTextStyle: CSSProperties = {
@@ -343,6 +360,13 @@ export default function FlowOverlay({
     if (closedRef.current) recorder.stop().catch(() => {});
   };
 
+  // Re-requests getUserMedia without leaving the record step or reopening
+  // the overlay — e.g. once the therapist has fixed an iOS system toggle.
+  const handleRetryMic = async () => {
+    await recorder.start();
+    if (closedRef.current) recorder.stop().catch(() => {});
+  };
+
   const handlePickText = () => {
     recorder.reset(); // clear any abandoned recording transcript so it can't resurface
     setMethod('text');
@@ -497,9 +521,21 @@ export default function FlowOverlay({
 
         {!generating && flowType === 'summary' && isRecordStep2 && (
           <div style={recWrapStyle}>
-            {recorder.micError ? (
-              <div style={micErrorTextStyle}>
-                אין גישה למיקרופון — אפשר לאשר גישה בדפדפן או לחזור ולכתוב נקודות במקום
+            {recorder.micErrorKind ? (
+              <div style={micErrorContentStyle}>
+                <div style={micErrorHeadlineStyle}>{getMicGuidance(recorder.micErrorKind).headline}</div>
+                <div style={micErrorStepsStyle}>
+                  {getMicGuidance(recorder.micErrorKind).steps.map((step, i) => (
+                    <div key={i} style={micErrorStepRowStyle}>
+                      {step}
+                    </div>
+                  ))}
+                </div>
+                {recorder.micErrorKind !== 'unsupported' && (
+                  <button type="button" onClick={handleRetryMic} className="pressable" style={micRetryBtnStyle}>
+                    ניסיון חוזר
+                  </button>
+                )}
               </div>
             ) : (
               <>

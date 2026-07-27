@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { askDror } from '@/api/ai';
 import { speakHebrew, stopSpeaking } from '@/api/tts';
 import { createChat, type ChatMsg } from '@/api/data';
+import { classifyMicError, type MicErrorKind } from './micAccess';
 
 // Minimal ambient typing for the (non-standard, Chrome-only) Web Speech API —
 // there is no official DOM lib type for it. Mirrors useSessionRecorder.ts's
@@ -77,10 +78,16 @@ export interface UseVoiceChat {
   /** Live transcript of what Dror last heard — updates as speech is recognized. */
   lastUserText: string;
   supported: boolean;
-  /** Mic permission denied/unavailable — the overlay shows its own notice and the loop stops. */
-  micError: boolean;
+  /**
+   * Mic permission denied/unavailable — the overlay shows its own guidance
+   * and the loop stops. Null when there's no mic error; otherwise the
+   * classified kind (Task W5.2 — see micAccess.ts/micCopy.ts).
+   */
+  micErrorKind: MicErrorKind | null;
   /** Recognition/transcription service failed (e.g. iOS 'service-not-allowed' or a constructor throw) while the mic itself is fine. */
   speechUnavailable: boolean;
+  /** Re-attempts listening after a mic error, without needing to reopen the overlay (e.g. once the user has fixed a settings toggle). */
+  retryMic(): void;
   stop(): void;
 }
 
@@ -102,7 +109,7 @@ const VOICE_CHAT_TITLE = 'שיחה קולית עם דרור';
 export function useVoiceChat({ patientId }: UseVoiceChatArgs): UseVoiceChat {
   const [phase, setPhase] = useState<VoicePhase>('listening');
   const [lastUserText, setLastUserText] = useState('');
-  const [micError, setMicError] = useState(false);
+  const [micErrorKind, setMicErrorKind] = useState<MicErrorKind | null>(null);
   const [speechUnavailable, setSpeechUnavailable] = useState(false);
 
   const supported = !!RecognitionCtor;
@@ -161,7 +168,7 @@ export function useVoiceChat({ patientId }: UseVoiceChatArgs): UseVoiceChat {
         fatal = true;
         wantListeningRef.current = false;
         if (MIC_ACCESS_RECOGNITION_ERRORS.has(ev.error)) {
-          setMicError(true);
+          setMicErrorKind(classifyMicError(ev.error));
         } else if (SPEECH_UNAVAILABLE_RECOGNITION_ERRORS.has(ev.error)) {
           setSpeechUnavailable(true);
         }
@@ -203,6 +210,17 @@ export function useVoiceChat({ patientId }: UseVoiceChatArgs): UseVoiceChat {
       wantListeningRef.current = false;
       setSpeechUnavailable(true);
     }
+  }
+
+  // Task W5.2: a mic error (unlike a closed overlay) doesn't tear down this
+  // hook instance — closedRef stays false, only wantListeningRef was turned
+  // off. So a retry is just clearing the error and listening again, once the
+  // user has actually fixed whatever blocked it (e.g. flipped the iOS system
+  // mic toggle back on) — no overlay remount/reload needed.
+  function retryMic() {
+    if (closedRef.current) return;
+    setMicErrorKind(null);
+    startListening();
   }
 
   async function handleTurn(userText: string) {
@@ -297,8 +315,9 @@ export function useVoiceChat({ patientId }: UseVoiceChatArgs): UseVoiceChat {
     caption: CAPTIONS[phase],
     lastUserText,
     supported,
-    micError,
+    micErrorKind,
     speechUnavailable,
+    retryMic,
     stop,
   };
 }

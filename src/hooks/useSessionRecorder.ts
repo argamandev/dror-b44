@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { classifyMicError, isMicSupported, MIC_UNSUPPORTED, type MicErrorKind } from './micAccess';
 
 // Minimal ambient typing for the (non-standard, Chrome-only) Web Speech API —
 // there is no official DOM lib type for it.
@@ -77,8 +78,14 @@ export interface SessionRecorder {
   running: boolean;
   transcript: string;
   supported: boolean;
-  /** Real mic-access failure (getUserMedia rejection, 'not-allowed'/'audio-capture') — recording cannot run. */
-  micError: boolean;
+  /**
+   * Real mic-access failure (getUserMedia rejection, or an unrecoverable
+   * 'not-allowed'/'audio-capture' from the recognition side) — recording
+   * cannot run. Null when there's no mic error; otherwise the classified
+   * kind (Task W5.2 — see micAccess.ts/micCopy.ts) so the UI can show
+   * precise, honest guidance instead of a generic refusal message.
+   */
+  micErrorKind: MicErrorKind | null;
   /** The transcription service failed (or isn't supported) while the mic itself is fine — recording continues, transcript stays empty. */
   transcriptUnavailable: boolean;
   start(): Promise<void>;
@@ -108,7 +115,7 @@ export function useSessionRecorder(): SessionRecorder {
   const [seconds, setSeconds] = useState(0);
   const [running, setRunning] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const [micError, setMicError] = useState(false);
+  const [micErrorKind, setMicErrorKind] = useState<MicErrorKind | null>(null);
   const [transcriptUnavailable, setTranscriptUnavailable] = useState(false);
 
   const secondsRef = useRef(0);
@@ -164,7 +171,7 @@ export function useSessionRecorder(): SessionRecorder {
       // instead of leaving a fake "listening" UI ticking away, and stop the
       // recording outright (there is no audio to keep capturing).
       if (MIC_ACCESS_RECOGNITION_ERRORS.has(ev.error)) {
-        setMicError(true);
+        setMicErrorKind(classifyMicError(ev.error));
         stopTimer();
         setRunning(false);
       } else if (TRANSCRIPT_UNAVAILABLE_RECOGNITION_ERRORS.has(ev.error)) {
@@ -213,19 +220,28 @@ export function useSessionRecorder(): SessionRecorder {
     fatalErrorRef.current = false;
     setSeconds(0);
     setTranscript('');
-    setMicError(false);
+    setMicErrorKind(null);
     setTranscriptUnavailable(false);
   }, []);
 
   const start = useCallback(async () => {
     reset();
 
+    // No getUserMedia at all (rather than a call that would throw/reject) —
+    // classify it the same way a real rejection would be, via the sentinel,
+    // instead of letting `undefined.getUserMedia(...)` throw a generic
+    // TypeError that would otherwise land in the 'unknown' bucket.
+    if (!isMicSupported()) {
+      setMicErrorKind(classifyMicError(MIC_UNSUPPORTED));
+      return;
+    }
+
     try {
       streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch {
+    } catch (err) {
       streamRef.current = null;
-      // Mic denied/unavailable — surface it instead of pretending to listen.
-      setMicError(true);
+      // Mic denied/unavailable — surface precisely why instead of pretending to listen.
+      setMicErrorKind(classifyMicError(err));
       return;
     }
 
@@ -338,7 +354,7 @@ export function useSessionRecorder(): SessionRecorder {
     running,
     transcript,
     supported,
-    micError,
+    micErrorKind,
     transcriptUnavailable,
     start,
     pause,

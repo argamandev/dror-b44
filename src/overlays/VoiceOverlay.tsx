@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { useVoiceChat } from '@/hooks/useVoiceChat';
+import { getMicGuidance } from '@/hooks/micCopy';
 
 // Ported from the design mock (lines 280-297 for the layout, 713-723 for the
 // state semantics), updated for the Dawn Break v2 mock which drops the
@@ -23,11 +24,10 @@ interface VoiceOverlayProps {
 }
 
 const UNSUPPORTED_CAPTION = 'שיחה קולית נתמכת בכרום בלבד כרגע';
-const MIC_ERROR_CAPTION = 'אין גישה למיקרופון — אפשר לאשר גישה בדפדפן';
 // Wave 4 Issue C: iOS Safari fires 'service-not-allowed' when Siri/Dictation
 // is unavailable even though mic permission is granted — a distinct message
-// from MIC_ERROR_CAPTION, since the fix (and the user's mental model) is
-// completely different: this isn't a permission problem.
+// from the mic-error guidance below (getMicGuidance), since the fix (and the
+// user's mental model) is completely different: this isn't a permission problem.
 const SPEECH_UNAVAILABLE_CAPTION =
   'זיהוי דיבור אינו זמין במכשיר הזה — באייפון ודאו שההכתבה מופעלת (הגדרות ← כללי ← מקלדת ← הפעלת הכתבה), או כתבו לדרור בצ\'אט';
 
@@ -104,6 +104,38 @@ const liveTextStyle: CSSProperties = {
   lineHeight: 1.5,
 };
 
+// -- mic-error guidance (Task W5.2) --
+const micHeadlineStyle: CSSProperties = {
+  fontFamily: 'Calibri,Assistant,sans-serif',
+  fontSize: 15.5,
+  fontWeight: 600,
+  color: 'rgba(255,255,255,0.9)',
+  marginTop: 10,
+  animation: 'drFade 0.6s ease',
+};
+const micStepsStyle: CSSProperties = {
+  marginTop: 10,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+  maxWidth: 280,
+  marginLeft: 'auto',
+  marginRight: 'auto',
+};
+const micStepRowStyle: CSSProperties = { fontSize: 12.5, color: 'rgba(255,255,255,0.6)', lineHeight: 1.5 };
+const micRetryBtnStyle: CSSProperties = {
+  marginTop: 18,
+  height: 44,
+  padding: '0 26px',
+  border: '1px solid rgba(255,255,255,0.3)',
+  borderRadius: 999,
+  background: 'rgba(255,255,255,0.12)',
+  color: '#ffffff',
+  fontSize: 13.5,
+  fontWeight: 600,
+  cursor: 'pointer',
+};
+
 export default function VoiceOverlay({ patientId, onClose }: VoiceOverlayProps) {
   const voice = useVoiceChat({ patientId });
 
@@ -117,18 +149,13 @@ export default function VoiceOverlay({ patientId, onClose }: VoiceOverlayProps) 
   const orbState = voice.phase === 'listening' ? 'listening' : 'thinking';
 
   // v2 mock drops the title + rotating caption entirely — pure orb presence.
-  // Only functional notices survive: unsupported-browser / mic-permission /
-  // speech-service-unavailable text, and (controller resolution 4) the
-  // last-heard-user-text line.
-  const notice = !voice.supported
-    ? UNSUPPORTED_CAPTION
-    : voice.micError
-      ? MIC_ERROR_CAPTION
-      : voice.speechUnavailable
-        ? SPEECH_UNAVAILABLE_CAPTION
-        : null;
+  // Only functional notices survive: unsupported-browser / mic-error (Task
+  // W5.2: rendered separately below with classified headline+steps+retry,
+  // not a single caption) / speech-service-unavailable text, and (controller
+  // resolution 4) the last-heard-user-text line.
+  const notice = !voice.supported ? UNSUPPORTED_CAPTION : voice.speechUnavailable ? SPEECH_UNAVAILABLE_CAPTION : null;
   const showLive =
-    voice.supported && !voice.micError && !voice.speechUnavailable && voice.lastUserText.trim().length > 0;
+    voice.supported && !voice.micErrorKind && !voice.speechUnavailable && voice.lastUserText.trim().length > 0;
 
   return (
     <div style={backdropStyle}>
@@ -143,11 +170,29 @@ export default function VoiceOverlay({ patientId, onClose }: VoiceOverlayProps) 
           <dror-orb size="210" state={orbState} />
         </div>
         <div style={textWrapStyle}>
-          {notice && <div style={captionStyle}>{notice}</div>}
-          {showLive && (
-            <div dir="rtl" style={liveTextStyle}>
-              {voice.lastUserText}
-            </div>
+          {voice.micErrorKind ? (
+            <>
+              <div style={micHeadlineStyle}>{getMicGuidance(voice.micErrorKind).headline}</div>
+              <div style={micStepsStyle}>
+                {getMicGuidance(voice.micErrorKind).steps.map((step, i) => (
+                  <div key={i} style={micStepRowStyle}>
+                    {step}
+                  </div>
+                ))}
+              </div>
+              <button type="button" onClick={voice.retryMic} className="pressable" style={micRetryBtnStyle}>
+                ניסיון חוזר
+              </button>
+            </>
+          ) : (
+            <>
+              {notice && <div style={captionStyle}>{notice}</div>}
+              {showLive && (
+                <div dir="rtl" style={liveTextStyle}>
+                  {voice.lastUserText}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
