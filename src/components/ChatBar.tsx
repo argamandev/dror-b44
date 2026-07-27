@@ -4,6 +4,7 @@ import { useDictation } from '@/hooks/useDictation';
 import { fullName } from '@/api/format';
 import type { Patient } from '@/api/data';
 import { uploadPrivateDoc, createPatientDoc, type UploadedDoc } from '@/api/docs';
+import { checkDocFile, type DocFileRejection } from '@/api/docFile';
 import type { ChatDoc } from '@/state/docPrefix';
 import ActionSheet, { type SheetRow } from '@/components/ActionSheet';
 
@@ -166,6 +167,13 @@ const SAVE_ERROR = 'שגיאה בשמירה, נסו שוב';
 const EXTRACT_FAILED = 'המסמך נשמר, אך לא הצלחנו לקרוא את תוכנו';
 const EXTRACT_FAILED_CHAT = 'לא הצלחנו לקרוא את תוכן המסמך — אין מה לצרף לשיחה';
 
+// Why a picked file was refused before it ever reached private storage.
+const REJECTION_TOAST: Record<DocFileRejection, string> = {
+  type: 'אפשר להעלות קובץ PDF או תמונה בלבד',
+  size: 'הקובץ גדול מדי — אפשר להעלות עד 20MB',
+  empty: 'הקובץ ריק, נסו לבחור אותו שוב',
+};
+
 const STAGE_LABEL: Record<'uploading' | 'reading' | 'saving', string> = {
   uploading: 'מעלה…',
   reading: 'קורא את המסמך…',
@@ -307,6 +315,14 @@ export default function ChatBar({
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
+    // The picker's accept= is advisory (Android/desktop offer "All files"), so
+    // the real gate is here — nothing unsupported or oversized ever reaches
+    // private storage (review round 1, Important 2).
+    const rejection = checkDocFile(file);
+    if (rejection) {
+      showToast(REJECTION_TOAST[rejection]);
+      return;
+    }
     // Bumping the generation supersedes any upload still in flight: its
     // continuations all return early, so a second pick can never race the
     // first into the chip — or into a PatientDoc record.

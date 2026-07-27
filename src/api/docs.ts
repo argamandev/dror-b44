@@ -54,6 +54,29 @@ function readExtraction(raw: unknown): { title: string; content: string } | null
   return { title, content };
 }
 
+// The SDK sets no request timeout of its own, so a signed-url or extraction
+// call that never answers would park the upload forever and — worse — leave
+// the file in private storage with no PatientDoc pointing at it. This is the
+// ceiling for BOTH calls together, after which we give up on reading the
+// document and save it unread (review round 1, Important 1).
+const EXTRACT_TIMEOUT_MS = 120000;
+
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('DOC_EXTRACT_TIMEOUT')), ms);
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
+
 // 'הפניה מהרופא.pdf' -> 'הפניה מהרופא'. Used when extraction gives no title.
 function titleFromFileName(name: string): string {
   const dot = name.lastIndexOf('.');
@@ -78,17 +101,26 @@ export async function uploadPrivateDoc(
   let extracted: { title: string; content: string } | null = null;
   let extractionFailed = false;
   try {
-    // 10 minutes: long enough for the extractor to fetch the file, short
-    // enough that a leaked url is worth little.
-    const { signed_url } = await base44.integrations.Core.CreateFileSignedUrl({
-      file_uri,
-      expires_in: 600,
-    });
-    const raw = await base44.integrations.Core.ExtractDataFromUploadedFile({
-      file_url: signed_url,
-      json_schema: EXTRACT_SCHEMA,
-    });
-    extracted = readExtraction(raw);
+    // A hang is treated exactly like a rejection: the race rejects, the catch
+    // below degrades to extractionFailed, and the caller still creates the
+    // PatientDoc with empty extracted_text.
+    extracted = await withTimeout(
+      (async () => {
+        // 10 minutes: long enough for the extractor to fetch the file (and
+        // comfortably longer than the timeout above), short enough that a
+        // leaked url is worth little.
+        const { signed_url } = await base44.integrations.Core.CreateFileSignedUrl({
+          file_uri,
+          expires_in: 600,
+        });
+        const raw = await base44.integrations.Core.ExtractDataFromUploadedFile({
+          file_url: signed_url,
+          json_schema: EXTRACT_SCHEMA,
+        });
+        return readExtraction(raw);
+      })(),
+      EXTRACT_TIMEOUT_MS
+    );
     if (!extracted) extractionFailed = true;
   } catch {
     extractionFailed = true;
