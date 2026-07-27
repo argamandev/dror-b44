@@ -301,6 +301,8 @@ function AuthedApp({ user }: { user: User }) {
             activePatientName={state.activePatient ? fullName(state.activePatient) : null}
             onOpenRecord={() => state.open('record')}
             onSend={state.sendChat}
+            patients={state.patients}
+            scopePatientId={state.chatScopePatientId}
             disabled={state.chatThinking}
             showToast={state.showToast}
             overlayOpen={state.overlay !== null}

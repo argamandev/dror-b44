@@ -1,0 +1,22 @@
+{
+  // A document the therapist uploaded about a patient (PDF / photo of a
+  // referral letter / form). `file_uri` is a PRIVATE-storage uri from
+  // Core.UploadPrivateFile — never a public UploadFile url — and is only
+  // readable through a short-lived signed url. `extracted_text` is what the
+  // Dror agent actually reads as grounded patient context.
+  "name": "PatientDoc", "type": "object", "title": "מסמך מטופל",
+  "properties": {
+    "patient_id":     { "type": "string" },
+    "title":          { "type": "string", "default": "" },
+    "file_uri":       { "type": "string", "default": "" },
+    "extracted_text": { "type": "string", "default": "" },
+    "doc_date":       { "type": "string", "default": "" }
+  },
+  "required": ["patient_id"],
+  "rls": {
+    "create": true,
+    "read":   { "created_by": "{{user.email}}" },
+    "update": { "created_by": "{{user.email}}" },
+    "delete": { "created_by": "{{user.email}}" }
+  }
+}

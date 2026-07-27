@@ -15,6 +15,7 @@ import {
 import { askDror } from '@/api/ai';
 import { fullName, sessionCount } from '@/api/format';
 import { deriveChatScope, type LiveChatLike } from '@/state/chatScope';
+import { composeDocMessage, type ChatDoc } from '@/state/docPrefix';
 
 export type Screen = 'home' | 'profile' | 'world' | 'chat' | 'draft';
 export type Overlay = null | 'menu' | 'search' | 'record' | 'voice' | 'flow' | 'settings' | 'appSettings';
@@ -239,7 +240,7 @@ export function useAppState() {
   // it and it never gates navigation. Mirrors mock sendChat (lines 690-704)
   // but the reply is the real agent, and each exchange is persisted as a Chat.
   const sendChat = useCallback(
-    async (raw: string, fromHome: boolean) => {
+    async (raw: string, fromHome: boolean, doc?: ChatDoc | null) => {
       // Concurrent-send guard: while a reply is in flight, sends are inert.
       // Uses the ref (not the `chatThinking` state) because state updates
       // from the in-flight send aren't visible in this closure until a
@@ -285,7 +286,11 @@ export function useAppState() {
       let conversationId: string;
       try {
         const res = await askDror({
-          message: text,
+          // Task W5.6: a document uploaded "רק לשיחה הזאת" is prefixed onto
+          // what the AGENT receives only — the therapist's bubble above (and
+          // the persisted Chat record) keep their own words, not the
+          // document's text.
+          message: composeDocMessage(doc ?? null, text),
           patientId: patientId || undefined,
           patientName,
           conversationId: withUser.conversationId || undefined,
@@ -387,6 +392,15 @@ export function useAppState() {
 
   const activePatient = patients.find((p) => p.id === activeId) ?? null;
   const activeSessionCount = sessionCount(entries);
+  // Task W5.6: which patient the chat on screen is actually about ('' for a
+  // general chat) — derived with the very rule sendChat applies to a message,
+  // so a document uploaded from the ChatBar can never attach to a different
+  // patient than the conversation it was uploaded into.
+  const chatScopePatientId = deriveChatScope(
+    screen === 'home',
+    { patientId: activeChat.patientId, started: !!(activeChat.id || activeChat.messages.length) },
+    activeId
+  );
 
   return {
     screen,
@@ -401,6 +415,7 @@ export function useAppState() {
     toast,
     activePatient,
     activeSessionCount,
+    chatScopePatientId,
     homeOrb,
     setHomeOrb,
     activeChat,
