@@ -56,12 +56,28 @@ describe('computeChromeColor', () => {
   });
 });
 
+const SHADOW = 'linear-gradient(to bottom, rgba(0,0,0,0.043) 0, rgba(0,0,0,0) 13px)';
+
 describe('computeStripBackground', () => {
   it('gives each screen the flat base its gradient has faded to by the bottom', () => {
-    expect(computeStripBackground('home', null)).toBe('#faf8fa');
-    expect(computeStripBackground('profile', null)).toBe('#faf8fa');
-    expect(computeStripBackground('world', null)).toBe('#faf8fa');
-    expect(computeStripBackground('chat', null)).toBe('#fbfafb');
+    expect(computeStripBackground('home', null)).toBe(`${SHADOW}, #faf8fa`);
+    expect(computeStripBackground('profile', null)).toBe(`${SHADOW}, #faf8fa`);
+    expect(computeStripBackground('world', null)).toBe(`${SHADOW}, #faf8fa`);
+    expect(computeStripBackground('chat', null)).toBe(`${SHADOW}, #fbfafb`);
+  });
+
+  // AppFrame clips the ChatBar's shadow at the frame's bottom edge; the strip
+  // finishes the fade so the two read as one surface instead of a block.
+  it('carries the ChatBar shadow past the seam, over the screen base', () => {
+    const home = computeStripBackground('home', null);
+    expect(home.startsWith('linear-gradient(to bottom, rgba(0,0,0,0.043)')).toBe(true);
+    expect(home.endsWith('#faf8fa')).toBe(true);
+  });
+
+  it('omits the shadow where no ChatBar is rendered to cast it', () => {
+    // DraftEditor (App.tsx `showChatBar`) and Login (outside AppFrame).
+    expect(computeStripBackground('draft', null)).toBe('#fbfafb');
+    expect(computeStripBackground('login', null)).toBe('#faf8fa');
   });
 
   it('continues a dark overlay scrim rather than leaving a light block under it', () => {

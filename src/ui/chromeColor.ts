@@ -165,6 +165,42 @@ const MENU_PEEK = blendOver({ r: 23, g: 23, b: 27, a: 0.42 }, '#faf8fa');
 const MENU_PANEL = '#fbf6ef';
 const MENU_STRIP = `linear-gradient(to right, ${MENU_PEEK} 0 ${100 - DRAWER_WIDTH_PCT}%, ${MENU_PANEL} ${100 - DRAWER_WIDTH_PCT}% 100%)`;
 
+// ---- Carrying the ChatBar's shadow across the seam ----
+//
+// Matching the strip's COLOUR to the screen turned out not to be enough (the
+// founder's zoomed screenshot, 27.7). AppFrame is `overflow:hidden`, so the
+// ChatBar's `0 10px 30px rgba(0,0,0,0.10)` is clipped dead at the frame's
+// bottom edge — and on a phone with the strip, --chatbar-bottom floors at
+// 12px, which leaves the shadow still ~45% of the way through its fade when
+// it hits the cut. Measured either side of the seam at 3x zoom: directly
+// under the bar #efedf0 above the line, #faf8fa below it, a razor-straight
+// full-width edge; beside the bar, no edge at all. Both areas were already
+// the same colour — what read as "a white block stuck under the panel" was
+// the missing shadow, not a mismatched tone.
+//
+// So the strip finishes the fade the frame cut off. Two measured numbers:
+//
+//   alpha  the shadow's strength where it is clipped. A 30px blur centred on
+//          the bar's bottom edge + 10px offset spans card_bottom-5 to
+//          card_bottom+25, so at +12px it is (25-12)/30 = 43% of 0.10 —
+//          0.043, matching the #efedf0 sampled there.
+//   depth  what is left of it: 25 - 12 = 13px.
+//
+// Both assume the 12px floor, which is the only case that can be seen: the
+// strip exists ONLY when --shell-gap > 0, and the gap is the status-bar inset
+// (47-62px on the iPhone line), always enough to drive --chatbar-bottom to
+// its floor. Where there is no gap the frame reaches the physical edge, body
+// is covered, and this paints nothing.
+//
+// Full-width, where the real shadow tapers off past the bar's 15px side
+// insets — the same "close enough to kill the seam" trade the top-of-viewport
+// table above makes.
+const CHATBAR_SHADOW = 'linear-gradient(to bottom, rgba(0,0,0,0.043) 0, rgba(0,0,0,0) 13px)';
+
+// The screens with no ChatBar to cast it: DraftEditor (App.tsx's
+// `showChatBar`) and Login, which renders outside AppFrame entirely.
+const NO_CHATBAR: ChromeScreen[] = ['draft', 'login'];
+
 /**
  * What to paint in the strip below the shell for a given (screen, overlay)
  * pair — a CSS background value, so it can be a gradient. Pure, no DOM.
@@ -174,7 +210,11 @@ export function computeStripBackground(screen: ChromeScreen, overlay: Overlay | 
   // Every other overlay lays its scrim across the whole frame, so the strip
   // continues it.
   if (overlay) return OVERLAY_DARK;
-  return SCREEN_STRIP[screen];
+  const base = SCREEN_STRIP[screen];
+  if (NO_CHATBAR.includes(screen)) return base;
+  // Layered: the gradient is a background IMAGE over the flat colour, so the
+  // shadow rides on top of the screen's own base tone rather than replacing it.
+  return `${CHATBAR_SHADOW}, ${base}`;
 }
 
 /** Computes the top-of-viewport color for a given (screen, overlay) pair — pure, no DOM access. */
