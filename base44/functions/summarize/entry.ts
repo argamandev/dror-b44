@@ -24,6 +24,29 @@ interface Entry {
   is_draft?: boolean;
 }
 
+// Task W6 — "what Dror should know about you": one TherapistPref record per
+// therapist (base44/entities/therapist-pref.jsonc), read here through the
+// same RLS-scoped client so a therapist only ever sees their own.
+interface TherapistPref {
+  guidelines?: string;
+  summary_style?: string;
+}
+
+// summary_style -> a one-line length/detail instruction; unset/unrecognized
+// values add nothing (a missing preference must be a no-op, never an error).
+function styleInstruction(style: string | undefined): string {
+  switch (style) {
+    case "תמציתי":
+      return "כתוב תמציתי ותכליתי ככל האפשר, במשפטים קצרים בלבד.";
+    case "מאוזן":
+      return "שמור על אורך מאוזן — לא תמציתי מדי ולא מפורט מדי.";
+    case "מפורט":
+      return "כתוב בפירוט רחב, כולל ניואנסים ודוגמאות מהחומר שסופק.";
+    default:
+      return "";
+  }
+}
+
 const PERSONA =
   "אתה דְּרוֹר, עוזר כתיבה קליני של פסיכולוג/ית פרטי/ת בישראל. תפקידך לנסח סיכום פגישה " +
   "טיפולית בעברית, בגוף שלישי, בטון מקצועי וחם, ללא אימוג'י, ולעולם ללא המצאת עובדות שאינן " +
@@ -70,6 +93,21 @@ Deno.serve(async (req: Request) => {
     }
     const name = fullName(patient);
 
+    // The therapist's own standing guidelines outrank the default style
+    // below, though never the structural requirements this function mandates
+    // (the section headings further down). A missing/unreadable record is
+    // "no preferences set", never an error — the draft must proceed either way.
+    let prefGuidelines = "";
+    let styleLine = "";
+    try {
+      const prefs = (await base44.entities.TherapistPref.list()) as TherapistPref[];
+      const pref = prefs[0];
+      prefGuidelines = pref?.guidelines?.trim() || "";
+      styleLine = styleInstruction(pref?.summary_style);
+    } catch {
+      // no-op: draft proceeds without therapist preferences
+    }
+
     const recentEntries = (await base44.entities.Entry.filter(
       { patient_id: patientId },
       "-entry_date",
@@ -99,7 +137,8 @@ Deno.serve(async (req: Request) => {
     const prompt = `${PERSONA}
 כתוב סיכום פגישה טיפולית בעברית עבור התיק של ${name}. מספר הפגישה: ${nextSession}.
 ${patient.context_notes ? "הקשר קבוע מהמטפל/ת: " + patient.context_notes : ""}
-${guide ? "דגשים מהמטפל/ת לסיכום הזה: " + guide : ""}${historyBlock}
+${prefGuidelines ? "הנחיות קבועות מהמטפל/ת לגבי אופן הכתיבה (גוברות על סגנון ברירת המחדל שלך, אך לא על מבנה הסעיפים הנדרש בהמשך): " + prefGuidelines : ""}
+${styleLine}${guide ? "דגשים מהמטפל/ת לסיכום הזה: " + guide : ""}${historyBlock}
 חומר הגלם מהפגישה הנוכחית (תמלול או נקודות שנרשמו): """${excerpt(source, SOURCE_MAX)}"""
 
 מבנה הסיכום (שדה body): כל סעיף בשורת כותרת נפרדת ואחריו תוכן, עם שורה ריקה בין הסעיפים — בדיוק במבנה הבא (רק להחליף את התוכן שבסוגריים המשולשים, בלי הסוגריים עצמם):

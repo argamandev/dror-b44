@@ -1,18 +1,27 @@
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { auth } from '@/api/data';
 import { displayName } from '@/api/format';
+import { GUIDELINES_MAX, SUMMARY_STYLES, loadMyPrefs, saveMyPrefs, type SummaryStyle } from '@/api/prefs';
 
-// Ported verbatim from the design mock (lines 472-501, "APP SETTINGS
-// OVERLAY"), plus two controller-resolved additions not in the mock: the
-// privacy row expands (mock only shows a static chevron) and a "התנתקות"
-// row was added below it.
+// Ported from the design mock (lines 472-501, "APP SETTINGS OVERLAY"), then
+// extended (Task W6) with a real, editable profile + preferences section —
+// see .superpowers/sdd/2026-07-25-dror-base44-import/task-w6-brief.md. Two
+// controller-resolved additions predate that task and stay: the privacy row
+// expands (the mock only shows a static chevron) and a "התנתקות" row sits
+// below it. The mock's "התראות" toggle is gone — nothing implements
+// notifications, and a toggle that does nothing is a lie to the user
+// (explicit founder ruling; do not "fix" it by wiring a fake preference).
 interface AppSettingsOverlayProps {
   user: { email: string; full_name?: string } | null;
   onClose: () => void;
+  showToast: (text: string) => void;
 }
 
 const PRIVACY_TEXT =
   'הנתונים שלך מבודדים ברמת הפלטפורמה — כל מטפל/ת רואה אך ורק את המטופלים, הפגישות והמסמכים שיצר/ה. דרור אינו מאמן מודלים על תוכן קליני.';
+
+const GUIDELINES_PLACEHOLDER =
+  'למשל: לכתוב בלשון נקבה, להימנע ממונחים אבחנתיים, לסיים כל סיכום בהמלצה אחת';
 
 const backdropStyle: CSSProperties = {
   position: 'absolute',
@@ -39,11 +48,17 @@ const closeBtnStyle: CSSProperties = {
   zIndex: 3,
 };
 
+// The card now holds more than a screenful (profile + preferences + the
+// settings rows below) — bounded maxHeight + its own scroll, rather than
+// clipping against (or pushing past) the safe areas.
 const cardStyle: CSSProperties = {
   position: 'absolute',
   left: 22,
   right: 22,
   top: 'calc(var(--top-inset) + 130px)',
+  maxHeight: 'calc(100% - var(--top-inset) - var(--bottom-inset) - 170px)',
+  overflowY: 'auto',
+  WebkitOverflowScrolling: 'touch',
   background: '#ffffff',
   borderRadius: 32,
   padding: '24px 20px',
@@ -60,32 +75,126 @@ const titleStyle: CSSProperties = {
   marginBottom: 14,
 };
 
-const identityRowStyle: CSSProperties = {
+// Profile block — the mock's account-chip aesthetic (gradient avatar-initial
+// + name + role), sized up since this is now the settings screen's own
+// editable identity, not just a small footer chip.
+const profileRowStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  gap: 12,
-  padding: 12,
-  borderRadius: 16,
+  gap: 14,
+  padding: 14,
+  borderRadius: 20,
   background: '#faf8fa',
-  marginBottom: 6,
+  marginBottom: 18,
 };
 
 const avatarStyle: CSSProperties = {
-  width: 40,
-  height: 40,
+  width: 56,
+  height: 56,
   borderRadius: '50%',
   background: 'linear-gradient(135deg,#6B71F6,#A9B9F9)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   color: '#fff',
-  fontSize: 15,
+  fontSize: 21,
   fontWeight: 700,
   flex: 'none',
 };
 
-const identityNameStyle: CSSProperties = { fontSize: 15, fontWeight: 600, color: '#17171b' };
-const identityRoleStyle: CSSProperties = { fontSize: 12.5, color: '#9a9ca1' };
+const profileNameStyle: CSSProperties = { fontSize: 17, fontWeight: 600, color: '#17171b' };
+const profileTitleStyle: CSSProperties = { fontSize: 13, color: '#9a9ca1', marginTop: 2 };
+const profileEmailStyle: CSSProperties = { fontSize: 12, color: '#9a9ca1', marginTop: 3 };
+
+const fieldLabelStyle: CSSProperties = {
+  fontSize: 12.5,
+  fontWeight: 600,
+  color: '#6d6f74',
+  marginBottom: 6,
+  marginTop: 14,
+};
+
+// fontSize 16 on both the inputs and the textarea below: iOS Safari zooms
+// the viewport on focus of any field under 16px. The viewport meta tag
+// already locks pinch/double-tap zoom (index.html), but this is the
+// per-field belt-and-suspenders the task brief asks to keep anyway.
+const inputStyle: CSSProperties = {
+  width: '100%',
+  height: 46,
+  border: 'none',
+  outline: 'none',
+  background: '#f6f5f7',
+  borderRadius: 14,
+  fontSize: 16,
+  color: '#17171b',
+  padding: '0 15px',
+  textAlign: 'right',
+  boxSizing: 'border-box',
+};
+
+const sectionTitleStyle: CSSProperties = {
+  fontSize: 15,
+  fontWeight: 600,
+  color: '#17171b',
+  textAlign: 'center',
+  marginTop: 26,
+};
+
+const sectionDescStyle: CSSProperties = {
+  fontSize: 12.5,
+  color: '#9a9ca1',
+  textAlign: 'center',
+  marginTop: 4,
+  lineHeight: 1.5,
+};
+
+const guidelinesTextareaStyle: CSSProperties = {
+  marginTop: 12,
+  width: '100%',
+  height: 110,
+  border: 'none',
+  outline: 'none',
+  background: '#f6f5f7',
+  borderRadius: 18,
+  resize: 'none',
+  fontSize: 16,
+  lineHeight: 1.6,
+  color: '#17171b',
+  padding: '14px 16px',
+  textAlign: 'right',
+  boxSizing: 'border-box',
+};
+
+const pillsRowStyle: CSSProperties = { display: 'flex', gap: 8, marginTop: 10 };
+
+const pillStyle = (selected: boolean): CSSProperties => ({
+  flex: 1,
+  textAlign: 'center',
+  padding: '10px 4px',
+  borderRadius: 999,
+  fontSize: 13.5,
+  fontWeight: 600,
+  cursor: 'pointer',
+  boxSizing: 'border-box',
+  background: selected ? '#17171b' : 'transparent',
+  color: selected ? '#ffffff' : '#6d6f74',
+  border: selected ? '1px solid #17171b' : '1px solid #9a9ca1',
+});
+
+const saveBtnStyle: CSSProperties = {
+  marginTop: 16,
+  width: '100%',
+  height: 50,
+  border: 'none',
+  borderRadius: 999,
+  background: '#17171b',
+  color: '#fff',
+  fontSize: 15,
+  fontWeight: 600,
+  cursor: 'pointer',
+};
+
+const dividerStyle: CSSProperties = { height: 1, background: '#efeef1', margin: '20px 6px 8px' };
 
 const rowStyle: CSSProperties = {
   display: 'flex',
@@ -98,25 +207,6 @@ const rowStyle: CSSProperties = {
 
 const rowLabelStyle: CSSProperties = { fontSize: 15, fontWeight: 500, color: '#17171b' };
 const rowValueStyle: CSSProperties = { fontSize: 13.5, color: '#9a9ca1' };
-
-const toggleWrapStyle: CSSProperties = {
-  width: 44,
-  height: 26,
-  borderRadius: 999,
-  background: '#17171b',
-  position: 'relative',
-  flex: 'none',
-};
-
-const toggleKnobStyle: CSSProperties = {
-  position: 'absolute',
-  top: 3,
-  left: 3,
-  width: 20,
-  height: 20,
-  borderRadius: '50%',
-  background: '#fff',
-};
 
 const chevronStyle = (open: boolean): CSSProperties => ({
   transform: open ? 'rotate(-90deg)' : 'none',
@@ -139,10 +229,43 @@ const logoutRowStyle: CSSProperties = {
 
 const logoutLabelStyle: CSSProperties = { fontSize: 15, fontWeight: 500, color: '#c0392b' };
 
-export default function AppSettingsOverlay({ user, onClose }: AppSettingsOverlayProps) {
+export default function AppSettingsOverlay({ user, onClose, showToast }: AppSettingsOverlayProps) {
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-  const name = displayName(user);
+
+  const [displayNameField, setDisplayNameField] = useState('');
+  const [professionalTitle, setProfessionalTitle] = useState('');
+  const [guidelines, setGuidelines] = useState('');
+  const [summaryStyle, setSummaryStyle] = useState<SummaryStyle | ''>('');
+  const [saving, setSaving] = useState(false);
+
+  // Falls back to the auth full_name/email (displayName() already does that
+  // fallback chain) whenever no prefs have been saved yet — both before the
+  // load below resolves, and permanently if the therapist never sets one.
+  const shownName = displayNameField.trim() || displayName(user);
+  const shownTitle = professionalTitle.trim();
+
+  // Loaded once when the overlay mounts. While the request is in flight the
+  // fields already render the auth-fallback state set above — there is no
+  // separate spinner/loading branch, so there is nothing to jump.
+  useEffect(() => {
+    let alive = true;
+    loadMyPrefs()
+      .then((prefs) => {
+        if (!alive || !prefs) return;
+        setDisplayNameField(prefs.display_name);
+        setProfessionalTitle(prefs.professional_title);
+        setGuidelines(prefs.guidelines);
+        setSummaryStyle(prefs.summary_style);
+      })
+      .catch(() => {
+        // A failed load just leaves the auth-fallback fields in place — the
+        // therapist can still fill them in and save normally.
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const handleLogout = async () => {
     if (loggingOut) return;
@@ -151,6 +274,25 @@ export default function AppSettingsOverlay({ user, onClose }: AppSettingsOverlay
       await auth.logout();
     } finally {
       window.location.reload();
+    }
+  };
+
+  const handleSave = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await saveMyPrefs({
+        display_name: displayNameField,
+        professional_title: professionalTitle,
+        guidelines,
+        summary_style: summaryStyle,
+      });
+      showToast('ההעדפות נשמרו');
+      onClose();
+    } catch {
+      showToast('לא הצלחנו לשמור את ההעדפות');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -163,19 +305,62 @@ export default function AppSettingsOverlay({ user, onClose }: AppSettingsOverlay
       </div>
       <div style={cardStyle}>
         <div style={titleStyle}>הגדרות</div>
-        <div style={identityRowStyle}>
-          <div style={avatarStyle}>{name.charAt(0)}</div>
+
+        <div style={profileRowStyle}>
+          <div style={avatarStyle}>{shownName.charAt(0)}</div>
           <div>
-            <div style={identityNameStyle}>{name}</div>
-            <div style={identityRoleStyle}>פסיכולוג/ית</div>
+            <div style={profileNameStyle}>{shownName}</div>
+            {shownTitle && <div style={profileTitleStyle}>{shownTitle}</div>}
+            <div style={profileEmailStyle}>{user?.email}</div>
           </div>
         </div>
-        <div style={rowStyle}>
-          <span style={rowLabelStyle}>התראות</span>
-          <div style={toggleWrapStyle}>
-            <div style={toggleKnobStyle} />
-          </div>
+
+        <div style={fieldLabelStyle}>שם תצוגה</div>
+        <input
+          dir="rtl"
+          value={displayNameField}
+          onChange={(e) => setDisplayNameField(e.target.value)}
+          placeholder="איך לפנות אליך?"
+          style={inputStyle}
+        />
+
+        <div style={fieldLabelStyle}>תואר מקצועי</div>
+        <input
+          dir="rtl"
+          value={professionalTitle}
+          onChange={(e) => setProfessionalTitle(e.target.value)}
+          placeholder="למשל: פסיכולוגית קלינית"
+          style={inputStyle}
+        />
+
+        <div style={sectionTitleStyle}>מה שדרור צריך לדעת עליך</div>
+        <div style={sectionDescStyle}>
+          ההנחיות האלה מעצבות איך דרור כותב סיכומים ומסמכים בשמך —
+          <br />
+          הן גוברות על ברירת המחדל שלו.
         </div>
+        <textarea
+          dir="rtl"
+          placeholder={GUIDELINES_PLACEHOLDER}
+          value={guidelines}
+          maxLength={GUIDELINES_MAX}
+          onChange={(e) => setGuidelines(e.target.value)}
+          style={guidelinesTextareaStyle}
+        />
+        <div style={pillsRowStyle}>
+          {SUMMARY_STYLES.map((style) => (
+            <div key={style} onClick={() => setSummaryStyle(style)} style={pillStyle(summaryStyle === style)}>
+              {style}
+            </div>
+          ))}
+        </div>
+
+        <button type="button" onClick={handleSave} disabled={saving} className="pressable" style={saveBtnStyle}>
+          {saving ? 'שומר…' : 'שמירה'}
+        </button>
+
+        <div style={dividerStyle} />
+
         <div style={rowStyle}>
           <span style={rowLabelStyle}>שפה</span>
           <span style={rowValueStyle}>עברית</span>

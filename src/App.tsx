@@ -234,7 +234,9 @@ function AuthedApp({ user }: { user: User }) {
           />
         )}
 
-        {state.overlay === 'appSettings' && <AppSettingsOverlay user={user} onClose={() => state.close()} />}
+        {state.overlay === 'appSettings' && (
+          <AppSettingsOverlay user={user} onClose={() => state.close()} showToast={state.showToast} />
+        )}
 
         {state.overlay === 'flow' && state.activePatient && (
           <FlowOverlay

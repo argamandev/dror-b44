@@ -1,0 +1,23 @@
+{
+  // The therapist's own preferences — free-text guidelines plus a
+  // summary-style choice — read by the `dror` agent and injected into the
+  // summarize/document functions' prompts (base44/agents/dror.jsonc,
+  // base44/functions/{summarize,document}/entry.ts) so the product's core
+  // promise ("drafts summaries per the therapist's own guidelines") is
+  // actually honored, not just stored. One record per therapist; RLS scopes
+  // reads to just their own, so "mine" is the first record in list()
+  // (src/api/prefs.ts).
+  "name": "TherapistPref", "type": "object", "title": "העדפות מטפל/ת",
+  "properties": {
+    "display_name":       { "type": "string", "default": "" },
+    "professional_title": { "type": "string", "default": "" },
+    "guidelines":         { "type": "string", "default": "" },
+    "summary_style":      { "type": "string", "default": "" }
+  },
+  "rls": {
+    "create": true,
+    "read":   { "created_by": "{{user.email}}" },
+    "update": { "created_by": "{{user.email}}" },
+    "delete": { "created_by": "{{user.email}}" }
+  }
+}

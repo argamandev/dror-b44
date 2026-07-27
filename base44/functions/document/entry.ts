@@ -25,6 +25,30 @@ interface Entry {
   is_draft?: boolean;
 }
 
+// Task W6 — "what Dror should know about you": one TherapistPref record per
+// therapist (base44/entities/therapist-pref.jsonc), read here through the
+// same RLS-scoped client so a therapist only ever sees their own. Mirrors
+// base44/functions/summarize/entry.ts.
+interface TherapistPref {
+  guidelines?: string;
+  summary_style?: string;
+}
+
+// summary_style -> a one-line length/detail instruction; unset/unrecognized
+// values add nothing (a missing preference must be a no-op, never an error).
+function styleInstruction(style: string | undefined): string {
+  switch (style) {
+    case "תמציתי":
+      return "כתוב תמציתי ותכליתי ככל האפשר, במשפטים קצרים בלבד.";
+    case "מאוזן":
+      return "שמור על אורך מאוזן — לא תמציתי מדי ולא מפורט מדי.";
+    case "מפורט":
+      return "כתוב בפירוט רחב, כולל ניואנסים ודוגמאות מהחומר שסופק.";
+    default:
+      return "";
+  }
+}
+
 const PERSONA =
   "אתה דְּרוֹר, עוזר כתיבה קליני של פסיכולוג/ית פרטי/ת בישראל. תפקידך לנסח מסמך רשמי בעברית " +
   "בשם המטפל/ת (כגון אישור טיפול, מכתב לקופת חולים, מסמך אינטייק או חוות דעת), בטון מקצועי ורשמי, " +
@@ -109,6 +133,22 @@ Deno.serve(async (req: Request) => {
     const name = fullName(patient);
     const therapist = therapistName(user);
 
+    // The therapist's own standing guidelines outrank the default style
+    // below, though never the structural requirements this function mandates
+    // (the לכבוד/הנדון/תאריך/בכבוד רב letter structure further down). A
+    // missing/unreadable record is "no preferences set", never an error —
+    // the draft must proceed either way.
+    let prefGuidelines = "";
+    let styleLine = "";
+    try {
+      const prefs = (await base44.entities.TherapistPref.list()) as TherapistPref[];
+      const pref = prefs[0];
+      prefGuidelines = pref?.guidelines?.trim() || "";
+      styleLine = styleInstruction(pref?.summary_style);
+    } catch {
+      // no-op: draft proceeds without therapist preferences
+    }
+
     let historyBlock: string;
     if (meetings === "all") {
       const recentEntries = (await base44.entities.Entry.filter(
@@ -155,7 +195,8 @@ Deno.serve(async (req: Request) => {
     const prompt = `${PERSONA}
 כתוב ${docType} עבור התיק של ${name}, בשם המטפל/ת ${therapist}.
 ${patient.context_notes ? "הקשר קבוע מהמטפל/ת: " + patient.context_notes : ""}
-${purpose ? "מטרת המסמך והנחיות מהמטפל/ת למסמך הזה: " + purpose : ""}${historyBlock}
+${prefGuidelines ? "הנחיות קבועות מהמטפל/ת לגבי אופן הכתיבה (גוברות על סגנון ברירת המחדל שלך, אך לא על מבנה המסמך הנדרש בהמשך): " + prefGuidelines : ""}
+${styleLine}${purpose ? "מטרת המסמך והנחיות מהמטפל/ת למסמך הזה: " + purpose : ""}${historyBlock}
 
 שדה body חייב להיות בנוי בדיוק לפי המבנה הבא, שורה אחרי שורה עם ירידת שורה אמיתית בין כל שורה, ושורה ריקה בין הסעיפים (רק להחליף את התוכן שבסוגריים המשולשים בתוכן בפועל, בלי הסוגריים עצמם, ובלי להוסיף כותרות/סעיפים נוספים):
 
