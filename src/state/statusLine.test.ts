@@ -40,6 +40,37 @@ describe('docStatusLine', () => {
   it('trims surrounding whitespace before measuring length and composing the line', () => {
     expect(docStatusLine('  מכתב  ')).toBe('דרור מנסח את המכתב…');
   });
+
+  // Round-1 fix: multi-word types are construct chains (סמיכות) — the
+  // definite article belongs on the LAST word, not glued onto the front of
+  // the whole phrase. The original always-prefix-the-front rule produced
+  // "החוות דעת" / "האישור טיפול", which don't read as Hebrew. Covers all
+  // four shipped docS1 chip labels (FlowOverlay.tsx) plus the brief's own
+  // "סיכום טיפול" example.
+  describe('multi-word construct-chain types (round-1 fix)', () => {
+    it('inserts ה before the last word of a two-word construct chain — "חוות דעת" chip', () => {
+      expect(docStatusLine('חוות דעת')).toBe('דרור מנסח את חוות הדעת…');
+    });
+
+    it('inserts ה before the last word — "אישור טיפול" chip', () => {
+      expect(docStatusLine('אישור טיפול')).toBe('דרור מנסח את אישור הטיפול…');
+    });
+
+    it('inserts ה before the last word — "מסמך אינטייק" chip', () => {
+      expect(docStatusLine('מסמך אינטייק')).toBe('דרור מנסח את מסמך האינטייק…');
+    });
+
+    it('inserts ה before the last word — the brief\'s own "סיכום טיפול" example', () => {
+      expect(docStatusLine('סיכום טיפול')).toBe('דרור מנסח את סיכום הטיפול…');
+    });
+
+    it('prefixes ה onto the FIRST word instead when the 2nd word reads as a bound preposition — "מכתב לקופת חולים" chip', () => {
+      // "לקופת" is ל + קופת ("to the fund of") — a pure last-word ה would
+      // give the awkward "מכתב לקופת החולים"; prefixing the first word
+      // instead reads naturally: "the letter to Kupat Holim".
+      expect(docStatusLine('מכתב לקופת חולים')).toBe('דרור מנסח את המכתב לקופת חולים…');
+    });
+  });
 });
 
 describe('SUMMARY_STATUS_LINE', () => {
