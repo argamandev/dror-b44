@@ -214,18 +214,6 @@ export default function ChatBar({
     onError: showToast,
   });
 
-  // Fix round 1 (Important 3): any overlay opening (record/voice/search/
-  // menu/settings/patient-context/flow — everything that shares `state.overlay`)
-  // must not leave this mic listening invisibly underneath it. 'drop' — not
-  // the default 'commit' — since the user didn't consciously end their own
-  // dictation; nothing captured so far should surface later either.
-  useEffect(() => {
-    if (overlayOpen) dictation.stop('drop');
-    // dictation.stop is a fresh function every render (not memoized) — only
-    // react to overlayOpen actually changing, not to every ChatBar re-render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [overlayOpen]);
-
   // ---- Task W5.6: document upload from the + button ----
 
   const [sheet, setSheet] = useState<null | 'add' | 'assign'>(null);
@@ -252,6 +240,34 @@ export default function ChatBar({
     },
     []
   );
+
+  // Fix round 1 (Important 3): any overlay opening (record/voice/search/
+  // menu/settings/patient-context/flow — everything that shares `state.overlay`)
+  // must not leave this mic listening invisibly underneath it. 'drop' — not
+  // the default 'commit' — since the user didn't consciously end their own
+  // dictation; nothing captured so far should surface later either.
+  //
+  // Final review (W5.6): this one choke-point also owns the local upload UI.
+  // ActionSheet renders after the overlays in the DOM at the same zIndex, so an
+  // upload still in flight when a full-screen overlay opens would pop
+  // "למי שייך המסמך?" on top of a live recording screen. The whole upload is
+  // dropped here rather than resumed later — the same treatment dictation gets
+  // on the line above. The generation bump is what covers the IN-FLIGHT case
+  // (without it, the upload resolves afterwards and re-opens the sheet over the
+  // overlay anyway), and clearing the stage stops the chip parking on 'מעלה…'
+  // with nothing left alive to resolve it.
+  useEffect(() => {
+    if (overlayOpen) {
+      dictation.stop('drop');
+      uploadGenRef.current += 1;
+      pendingUploadRef.current = null;
+      setSheet(null);
+      setStage(null);
+    }
+    // dictation.stop is a fresh function every render (not memoized) — only
+    // react to overlayOpen actually changing, not to every ChatBar re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overlayOpen]);
 
   const placeholder = dictation.pending
     ? 'מתמלל…'
