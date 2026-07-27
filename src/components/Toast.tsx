@@ -7,7 +7,13 @@ const toastStyle: CSSProperties = {
   // Sits above the ChatBar, tracking wherever the bar's bottom edge lands
   // (Task W5.8) rather than hard-coding the 44px it used to assume.
   bottom: 'calc(var(--chatbar-bottom) + 126px)',
-  zIndex: 12,
+  // Above every overlay (they sit at zIndex 20, the menu drawer included).
+  // Task W5.9 put the app's screens and overlays inside a layer that slides
+  // 86% of the column to the left while the drawer is open, so the toast is
+  // rendered OUTSIDE that layer (App.tsx, beside <MenuDrawer>) — otherwise a
+  // failure raised while the drawer is open (refreshChats runs on every open)
+  // would paint ~370px off-screen and expire unseen after its 2.8s.
+  zIndex: 25,
   background: '#17171b',
   color: '#ffffff',
   borderRadius: 999,

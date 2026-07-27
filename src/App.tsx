@@ -211,8 +211,6 @@ function AuthedApp({ user }: { user: User }) {
           )}
         </div>
 
-        {state.toast && <Toast text={state.toast} />}
-
         {state.overlay === 'search' && (
           <SearchOverlay
             patients={state.patients}
@@ -322,6 +320,13 @@ function AuthedApp({ user }: { user: User }) {
         }}
         onOpenSettings={() => state.open('appSettings')}
       />
+
+      {/* Outside the push layer too, and above everything (Toast.tsx zIndex
+          25): a toast must stay on screen wherever it is raised from. Inside
+          the layer it would ride the drawer's 86% slide off to the left —
+          and the drawer's own open triggers refreshChats, whose failure path
+          is a toast. */}
+      {state.toast && <Toast text={state.toast} />}
     </AppFrame>
   );
 }
