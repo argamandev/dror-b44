@@ -142,13 +142,37 @@ export interface UseDictation {
   /** True while a recorded utterance is being transcribed (recorded engine only). */
   pending: boolean;
   start(): void;
-  stop(): void;
+  /**
+   * Ends dictation. 'commit' (the default — a manual mic-off tap) lets
+   * whatever was captured land honestly: the live engine flushes one last
+   * result, the recorded engine transcribes and appends. 'drop' (a send, an
+   * overlay opening, anything that isn't the user consciously ending their
+   * own dictation) hard-tears-down instead and guarantees nothing captured
+   * after this call can land in the input later — see fix round 1 (Critical
+   * 1): a message must never be silently rewritten by a trailing
+   * recognition result or a still-in-flight transcription after it's sent.
+   */
+  stop(mode?: 'commit' | 'drop'): void;
   toggle(): void;
+  /**
+   * Re-anchors dictation onto a manually-edited value — call this from the
+   * input's onChange while `active` is true so a keystroke becomes part of
+   * what the next interim/final builds on, instead of the next chunk
+   * silently overwriting it (fix round 1, Critical 2).
+   */
+  syncAnchor(next: string): void;
 }
 
 export function useDictation({ getValue, setValue, onError }: UseDictationArgs): UseDictation {
   const [active, setActive] = useState(false);
   const [pending, setPending] = useState(false);
+  // Mirrors `pending` synchronously — stop('drop') needs to know RIGHT NOW
+  // whether a transcription is in flight (the `pending` state variable can
+  // be one render stale, since ChatBar reads it off whatever `dictation`
+  // object it was last re-rendered with) so it can invalidate that flight
+  // even when start/stop have already cleared every other ref (fix round 1,
+  // Critical 1).
+  const pendingRef = useRef(false);
 
   // Kept in sync every render so callbacks that fire well after this render
   // (a recognition event, a transcription round-trip) always read the
@@ -187,6 +211,16 @@ export function useDictation({ getValue, setValue, onError }: UseDictationArgs):
   // onend (which ALSO fires right after an error) does not restart listening
   // on top of an error state.
   const fatalRef = useRef(false);
+  // Identifies one dictation attempt (bumped by every start() and by every
+  // hard teardown — see releaseMedia()). Every async callback that could
+  // otherwise land text after its own session is no longer the current one
+  // (a trailing live-engine result, a still-in-flight transcription) closes
+  // over the generation it was created under and checks it against this
+  // before writing anything — mirrors useVoiceChat.ts's runIdRef, needed here
+  // because 'drop' can't cancel a getUserMedia/transcribeAudio promise
+  // already in flight, only make its eventual resolution a no-op (fix round
+  // 1, Critical 1 + the cross-session corruption a plain boolean would miss).
+  const genRef = useRef(0);
 
   function clearHardCap() {
     if (hardCapTimerRef.current !== undefined) {
@@ -202,6 +236,10 @@ export function useDictation({ getValue, setValue, onError }: UseDictationArgs):
   // still be transcribed). Idempotent and never throws — safe to call
   // defensively at the top of a fresh attempt too.
   function releaseMedia() {
+    // The point of no return for whatever generation was active: any
+    // still-in-flight async work from it (a transcription round-trip) now
+    // fails its gen check and becomes a silent no-op when it resolves.
+    genRef.current += 1;
     clearHardCap();
 
     const rec = recognitionRef.current;
@@ -246,7 +284,7 @@ export function useDictation({ getValue, setValue, onError }: UseDictationArgs):
 
   // -- live engine (SpeechRecognition) -------------------------------------
 
-  function createRecognition(): SpeechRecognitionLike | null {
+  function createRecognition(gen: number): SpeechRecognitionLike | null {
     if (!RecognitionCtor) return null;
     const rec = new RecognitionCtor();
     rec.lang = 'he-IL';
@@ -254,7 +292,11 @@ export function useDictation({ getValue, setValue, onError }: UseDictationArgs):
     rec.interimResults = true;
 
     rec.onresult = (ev) => {
-      if (closedRef.current) return;
+      // gen check: a 'commit' stop deliberately leaves this handler attached
+      // so Chrome can flush one last result — but if a NEW session has
+      // already started by the time that flush arrives, it must not land on
+      // top of the new session's anchor (fix round 1, Critical 1).
+      if (closedRef.current || gen !== genRef.current) return;
       let finalChunk = '';
       let interimChunk = '';
       for (let i = ev.resultIndex; i < ev.results.length; i++) {
@@ -276,7 +318,7 @@ export function useDictation({ getValue, setValue, onError }: UseDictationArgs):
     };
 
     rec.onerror = (ev) => {
-      if (closedRef.current) return;
+      if (closedRef.current || gen !== genRef.current) return;
       if (!FATAL_RECOGNITION_ERRORS.has(ev.error)) return; // e.g. 'no-speech' — onend decides
       fatalRef.current = true;
       activeRef.current = false;
@@ -291,7 +333,7 @@ export function useDictation({ getValue, setValue, onError }: UseDictationArgs):
 
     rec.onend = () => {
       if (recognitionRef.current === rec) recognitionRef.current = null;
-      if (closedRef.current || !activeRef.current || fatalRef.current) return;
+      if (closedRef.current || !activeRef.current || fatalRef.current || gen !== genRef.current) return;
       // Chrome's silence timeout for a continuous session — keep listening;
       // no error surfaced (matches useSessionRecorder.ts's live transcript).
       try {
@@ -307,11 +349,11 @@ export function useDictation({ getValue, setValue, onError }: UseDictationArgs):
     return rec;
   }
 
-  function startLive() {
+  function startLive(gen: number) {
     fatalRef.current = false;
     let rec: SpeechRecognitionLike | null;
     try {
-      rec = createRecognition();
+      rec = createRecognition(gen);
     } catch {
       activeRef.current = false;
       setActive(false);
@@ -341,7 +383,7 @@ export function useDictation({ getValue, setValue, onError }: UseDictationArgs):
 
   // -- recorded engine (MediaRecorder + transcribeAudio) -------------------
 
-  async function startRecorded() {
+  async function startRecorded(gen: number) {
     if (startingRef.current) return;
     startingRef.current = true;
     try {
@@ -421,7 +463,7 @@ export function useDictation({ getValue, setValue, onError }: UseDictationArgs):
 
         if (closedRef.current) return;
         if (!blob || blob.size === 0) return;
-        void finishTranscription(blob);
+        void finishTranscription(blob, gen);
       };
 
       try {
@@ -440,21 +482,31 @@ export function useDictation({ getValue, setValue, onError }: UseDictationArgs):
     }
   }
 
-  async function finishTranscription(blob: Blob) {
+  async function finishTranscription(blob: Blob, gen: number) {
+    pendingRef.current = true;
     setPending(true);
     try {
       const text = await transcribeAudio(blob);
-      if (closedRef.current) return;
+      // gen check: a 'drop' stop (send / overlay-open / unmount) can land
+      // between this call starting and the network round-trip resolving —
+      // releaseMedia() already bumped genRef when that happened, so this
+      // generation's result is stale and must never reach the input (fix
+      // round 1, Critical 1 — the exact "dictate, tap send, leftover speech
+      // reappears" scenario).
+      if (closedRef.current || gen !== genRef.current) return;
       const trimmed = text.trim();
       if (trimmed) {
         anchorRef.current = mergeDictationText(anchorRef.current, trimmed);
         setValueRef.current(anchorRef.current);
       }
     } catch {
-      if (closedRef.current) return;
+      if (closedRef.current || gen !== genRef.current) return;
       onErrorRef.current(STT_FAILED_TOAST);
     } finally {
-      if (!closedRef.current) setPending(false);
+      if (!closedRef.current) {
+        pendingRef.current = false;
+        setPending(false);
+      }
     }
   }
 
@@ -466,20 +518,46 @@ export function useDictation({ getValue, setValue, onError }: UseDictationArgs):
       onErrorRef.current(getMicGuidance('unsupported').headline);
       return;
     }
+    // A new generation — invalidates any async work still in flight from a
+    // previous session (e.g. a 'commit'-stopped recording whose transcription
+    // hadn't resolved yet when this fresh start() fired).
+    genRef.current += 1;
+    const gen = genRef.current;
     anchorRef.current = getValueRef.current();
     activeRef.current = true;
     setActive(true);
     if (ENGINE === 'recorded') {
-      void startRecorded();
+      void startRecorded(gen);
     } else {
-      startLive();
+      startLive(gen);
     }
   }
 
-  function stop() {
-    if (!activeRef.current && !recognitionRef.current && !recorderRef.current) return;
+  function stop(mode: 'commit' | 'drop' = 'commit') {
+    // pendingRef (not the `pending` state) so this is accurate even when a
+    // caller's closure over `dictation` is one render behind — see its
+    // docstring. Without it, a send arriving exactly while a recorded
+    // utterance is already mid-transcription (engine refs already null,
+    // nothing left to release synchronously) would hit this guard and skip
+    // the generation bump below, letting the stale result land anyway.
+    if (!activeRef.current && !recognitionRef.current && !recorderRef.current && !pendingRef.current) return;
+
     activeRef.current = false;
     setActive(false);
+
+    if (mode === 'drop') {
+      // Send / an overlay opening / unmount: nothing captured up to now may
+      // land in the input later. Hard-teardown both engines outright —
+      // releaseMedia()'s generation bump is what makes a still-in-flight
+      // transcription's eventual resolution a silent no-op (fix round 1,
+      // Critical 1).
+      releaseMedia();
+      pendingRef.current = false;
+      setPending(false);
+      return;
+    }
+
+    // 'commit' — the manual mic-off tap: let the tail land honestly.
     clearHardCap();
 
     // Live engine: rec.stop() (not abort()) so Chrome flushes one last
@@ -509,8 +587,19 @@ export function useDictation({ getValue, setValue, onError }: UseDictationArgs):
   }
 
   function toggle() {
-    if (activeRef.current) stop();
+    if (activeRef.current) stop(); // manual mic-off tap — commit the tail
     else start();
+  }
+
+  // Fix round 1, Critical 2: the input stays editable while dictation is
+  // active, but the anchor (what the next interim/final builds onto) was
+  // only ever updated by the engine itself — a manual keystroke was
+  // invisible to it, so the next chunk silently overwrote whatever the user
+  // just typed. ChatBar's onChange calls this while `active` so the anchor
+  // always reflects the input's true current content.
+  function syncAnchor(next: string) {
+    if (closedRef.current) return;
+    anchorRef.current = next;
   }
 
   // Safety net: release everything if the component unmounts mid-dictation
@@ -528,5 +617,5 @@ export function useDictation({ getValue, setValue, onError }: UseDictationArgs):
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { active, pending, start, stop, toggle };
+  return { active, pending, start, stop, toggle, syncAnchor };
 }

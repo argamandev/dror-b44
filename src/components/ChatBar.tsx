@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { Screen } from '@/state/useAppState';
 import { useDictation } from '@/hooks/useDictation';
 
@@ -15,6 +15,15 @@ interface ChatBarProps {
   disabled?: boolean;
   /** App-level compact toast — used for dictation failures (Task W5.4: mic errors, transcription failures). */
   showToast: (text: string) => void;
+  /**
+   * True whenever ANY overlay is open (record, voice, search, menu,
+   * settings/patient-context, flow, app settings) — ChatBar stays mounted
+   * underneath every one of them, so this is what stops an active dictation
+   * from running invisibly behind a full-screen overlay (fix round 1,
+   * Important 3). Not scoped to individual overlays: `state.overlay !== null`
+   * covers every entry uniformly, with no per-overlay special-casing.
+   */
+  overlayOpen: boolean;
 }
 
 const barStyle: CSSProperties = {
@@ -88,6 +97,7 @@ export default function ChatBar({
   onSend,
   disabled = false,
   showToast,
+  overlayOpen,
 }: ChatBarProps) {
   const [text, setText] = useState('');
   // Read by useDictation's async callbacks (a recognition event, a
@@ -104,6 +114,18 @@ export default function ChatBar({
     onError: showToast,
   });
 
+  // Fix round 1 (Important 3): any overlay opening (record/voice/search/
+  // menu/settings/patient-context/flow — everything that shares `state.overlay`)
+  // must not leave this mic listening invisibly underneath it. 'drop' — not
+  // the default 'commit' — since the user didn't consciously end their own
+  // dictation; nothing captured so far should surface later either.
+  useEffect(() => {
+    if (overlayOpen) dictation.stop('drop');
+    // dictation.stop is a fresh function every render (not memoized) — only
+    // react to overlayOpen actually changing, not to every ChatBar re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overlayOpen]);
+
   const placeholder = dictation.pending
     ? 'מתמלל…'
     : screen === 'home'
@@ -112,12 +134,22 @@ export default function ChatBar({
         ? `על מה אני ו${activePatientName} דיברנו בפגישה הקודמת?`
         : 'כתוב לדרור…';
 
+  const handleChange = (next: string) => {
+    setText(next);
+    // Fix round 1 (Critical 2): re-anchor onto the manual edit so the next
+    // interim/final builds on top of it instead of clobbering it.
+    if (dictation.active) dictation.syncAnchor(next);
+  };
+
   const handleSend = () => {
     if (disabled) return;
     const trimmed = text.trim();
     if (!trimmed) return;
-    // No capture continuing after send (brief requirement 2).
-    dictation.stop();
+    // Fix round 1 (Critical 1): 'drop', not the default 'commit' — a send is
+    // not the user consciously ending their own dictation, so nothing
+    // captured up to now (a trailing live result, a still-in-flight
+    // transcription) may land in the input after this message is gone.
+    dictation.stop('drop');
     onSend(trimmed, screen === 'home');
     setText('');
   };
@@ -128,7 +160,7 @@ export default function ChatBar({
         dir="rtl"
         placeholder={placeholder}
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => handleChange(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             e.preventDefault();

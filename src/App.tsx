@@ -303,6 +303,7 @@ function AuthedApp({ user }: { user: User }) {
             onSend={state.sendChat}
             disabled={state.chatThinking}
             showToast={state.showToast}
+            overlayOpen={state.overlay !== null}
           />
         )}
 
