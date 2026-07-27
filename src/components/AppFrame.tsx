@@ -19,11 +19,12 @@ import type { CSSProperties, ReactNode } from 'react';
 // one on top of it.)
 // The frame FILLS the pinned document rather than measuring the viewport
 // itself: html/body are `position:fixed; inset:0` and #root is `height:100%`
-// (base.css), so `height:100%` here is exact by construction. `100dvh` was
-// not — on the founder's installed PWA it resolved a few points short of the
-// physical bottom, and the uncovered strip showed body's opaque near-white
-// as a white block under every screen (and, since an overlay's scrim is
-// `inset:0` INSIDE this frame, under the dark overlays too).
+// (base.css), so `height:100%` here just inherits whatever the shell resolved
+// to. That indirection is the point — on the founder's installed PWA neither
+// `100%` nor `100dvh` reaches the physical bottom (both stop at the layout
+// viewport, 59px short), so base.css's standalone rule sets the shell to
+// `100vh` in one place and every screen, overlay scrim and bottom-anchored
+// control follows from it.
 const frameStyle: CSSProperties = {
   position: 'relative',
   maxWidth: 430,
