@@ -427,7 +427,7 @@ export default function RecordOverlay({
           <>
             <div style={statusTextStyle}>
               {recorder.running
-                ? 'הקלטת הפגישה החלה. לאחר סיומה נבחר למי שייך סיכום הפגישה.'
+                ? 'הקלטת הפגישה החלה. לאחר סיומה נבחר עבור מי לסכם את הפגישה.'
                 : 'ההקלטה מושהית'}
             </div>
             <div style={recContentStyle}>
@@ -458,7 +458,7 @@ export default function RecordOverlay({
 
       {phase === 'assign' && (
         <div style={panelStyle}>
-          <div style={titleStyle}>לאיזה מטופל סיכום הפגישה צריך להשתייך?</div>
+          <div style={titleStyle}>עבור איזה מטופל לסכם את הפגישה?</div>
           <div style={inputWrapStyle}>
             <svg viewBox="0 0 24 24" fill="none" width={18} height={18} style={{ flex: 'none' }}>
               <circle cx={11} cy={11} r={7} stroke="#9a9ca1" strokeWidth={2} />
