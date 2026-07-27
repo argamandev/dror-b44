@@ -302,6 +302,7 @@ function AuthedApp({ user }: { user: User }) {
             onOpenRecord={() => state.open('record')}
             onSend={state.sendChat}
             disabled={state.chatThinking}
+            showToast={state.showToast}
           />
         )}
 

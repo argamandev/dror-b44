@@ -1,5 +1,6 @@
-import { useState, type CSSProperties } from 'react';
+import { useRef, useState, type CSSProperties } from 'react';
 import type { Screen } from '@/state/useAppState';
+import { useDictation } from '@/hooks/useDictation';
 
 // Ported verbatim from the design mock (lines 200-218). Visible on every
 // screen except 'draft' (caller decides whether to render it at all).
@@ -12,6 +13,8 @@ interface ChatBarProps {
   onSend: (text: string, fromHome: boolean) => void;
   /** True while a reply is in flight — blocks new sends but keeps the input editable. */
   disabled?: boolean;
+  /** App-level compact toast — used for dictation failures (Task W5.4: mic errors, transcription failures). */
+  showToast: (text: string) => void;
 }
 
 const barStyle: CSSProperties = {
@@ -52,6 +55,14 @@ const inputStyle: CSSProperties = {
 const rowStyle: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between' };
 const leftIconsStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 14 };
 const iconBtn: CSSProperties = { width: 24, height: 24, cursor: 'pointer' };
+
+// Task W5.4: while dictation is listening/recording, the mic button pulses
+// in accent indigo — reuses base.css's existing drBreathe keyframe (already
+// used for VoiceOverlay's orb halo) rather than introducing a new animation.
+const micBtnActive: CSSProperties = { ...iconBtn, animation: 'drBreathe 1.6s ease-in-out infinite' };
+// Transcription in flight (recorded engine only) — a subtle busy state; there
+// is nothing left to toggle until it resolves.
+const micBtnPending: CSSProperties = { ...iconBtn, opacity: 0.5, pointerEvents: 'none' };
 const sendBtn: CSSProperties = {
   width: 36,
   height: 36,
@@ -70,11 +81,32 @@ const sendBtnDisabled: CSSProperties = {
   pointerEvents: 'none',
 };
 
-export default function ChatBar({ screen, activePatientName, onOpenRecord, onSend, disabled = false }: ChatBarProps) {
+export default function ChatBar({
+  screen,
+  activePatientName,
+  onOpenRecord,
+  onSend,
+  disabled = false,
+  showToast,
+}: ChatBarProps) {
   const [text, setText] = useState('');
+  // Read by useDictation's async callbacks (a recognition event, a
+  // transcription round-trip) so they always append onto the CURRENT input
+  // value rather than whatever it was when dictation started.
+  const textRef = useRef(text);
+  textRef.current = text;
 
-  const placeholder =
-    screen === 'home'
+  // Task W5.4 — dictation into this input, separate from the orb's voice
+  // conversation (VoiceOverlay/useVoiceChat, opened from Home's orb only).
+  const dictation = useDictation({
+    getValue: () => textRef.current,
+    setValue: setText,
+    onError: showToast,
+  });
+
+  const placeholder = dictation.pending
+    ? 'מתמלל…'
+    : screen === 'home'
       ? 'תיצור לי מסמך אינטייק על @אלון'
       : activePatientName
         ? `על מה אני ו${activePatientName} דיברנו בפגישה הקודמת?`
@@ -84,6 +116,8 @@ export default function ChatBar({ screen, activePatientName, onOpenRecord, onSen
     if (disabled) return;
     const trimmed = text.trim();
     if (!trimmed) return;
+    // No capture continuing after send (brief requirement 2).
+    dictation.stop();
     onSend(trimmed, screen === 'home');
     setText('');
   };
@@ -110,11 +144,38 @@ export default function ChatBar({ screen, activePatientName, onOpenRecord, onSen
               <path d="M12 5v14M5 12h14" stroke="#17171b" strokeWidth={2} strokeLinecap="round" />
             </svg>
           </div>
-          <div onClick={onOpenRecord} title="הקלטה" className="pressable" style={iconBtn}>
+          {/* Task W5.4: dictation into the input — tap speaks Hebrew into the
+              text, tap again stops. Separate from the orb's voice
+              conversation (Home's center orb → VoiceOverlay), which this
+              button never opens. */}
+          <div
+            onClick={dictation.toggle}
+            title={dictation.active ? 'עצירת הכתבה' : 'הכתבה קולית'}
+            className="pressable"
+            style={dictation.pending ? micBtnPending : dictation.active ? micBtnActive : iconBtn}
+          >
             <svg viewBox="0 0 24 24" fill="none" width={24} height={24}>
-              <rect x={8} y={2} width={8} height={13} rx={4} stroke="#17171b" strokeWidth={2} />
-              <path d="M5 11a7 7 0 0014 0" stroke="#17171b" strokeWidth={2} strokeLinecap="round" />
-              <path d="M12 18v3" stroke="#17171b" strokeWidth={2} strokeLinecap="round" />
+              <rect
+                x={8}
+                y={2}
+                width={8}
+                height={13}
+                rx={4}
+                stroke={dictation.active ? '#6B71F6' : '#17171b'}
+                strokeWidth={2}
+              />
+              <path
+                d="M5 11a7 7 0 0014 0"
+                stroke={dictation.active ? '#6B71F6' : '#17171b'}
+                strokeWidth={2}
+                strokeLinecap="round"
+              />
+              <path
+                d="M12 18v3"
+                stroke={dictation.active ? '#6B71F6' : '#17171b'}
+                strokeWidth={2}
+                strokeLinecap="round"
+              />
             </svg>
           </div>
         </div>
