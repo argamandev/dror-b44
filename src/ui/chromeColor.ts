@@ -134,18 +134,8 @@ const MENU_SPEC: ScreenColorSpec = { fg: { r: 107, g: 113, b: 246, a: 0.2 }, bg:
 // (0.55 for most, 0.62 for RecordOverlay.)
 const OVERLAY_DARK = '#4a4a52';
 
-// VoiceOverlay.tsx backdropStyle: a radial-gradient centered at (50%, 106%)
-// — i.e. BELOW the box — fading through rgba(23,23,27,0.92) at 68% to
-// rgba(10,10,12,0.97) at 100%, over a rgba(12,12,14,0.9) fallback. The top
-// of the viewport sits far past the gradient's far edge from that
-// below-box center, so it saturates to (at least) the last stop: a
-// near-opaque near-black. rgba(10,10,12,0.97) composited over anything
-// lands within a channel or two of #0c0c0e either way.
-const VOICE_DARK = '#0c0c0e';
-
 /** Computes the top-of-viewport color for a given (screen, overlay) pair — pure, no DOM access. */
 export function computeChromeColor(screen: ChromeScreen, overlay: Overlay | null): string {
-  if (overlay === 'voice') return VOICE_DARK;
   if (overlay === 'menu') return blendOver(MENU_SPEC.fg, MENU_SPEC.bg);
   if (overlay) return OVERLAY_DARK;
   const spec = SCREEN_COLOR_SPECS[screen];

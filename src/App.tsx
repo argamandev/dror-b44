@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback, type CSSProperties } from 'react';
 import { auth } from '@/api/data';
-import { unlockAudio } from '@/api/audioUnlock';
 import { fullName } from '@/api/format';
 import Login from '@/screens/Login';
 import Home from '@/screens/Home';
@@ -14,7 +13,6 @@ import MenuDrawer, { DRAWER_WIDTH_PCT } from '@/overlays/MenuDrawer';
 import AppSettingsOverlay from '@/overlays/AppSettingsOverlay';
 import FlowOverlay from '@/overlays/FlowOverlay';
 import RecordOverlay from '@/overlays/RecordOverlay';
-import VoiceOverlay from '@/overlays/VoiceOverlay';
 import AppFrame from '@/components/AppFrame';
 import ChatBar from '@/components/ChatBar';
 import Toast from '@/components/Toast';
@@ -154,17 +152,8 @@ function AuthedApp({ user }: { user: User }) {
             <Home
               homeOrb={state.homeOrb}
               onSearch={() => state.open('search')}
-              onRecord={() => state.open('record')}
               onMenu={() => state.open('menu')}
-              onOrbClick={() => {
-                // Task W5.3: iOS only lets audio start from inside a user
-                // gesture, and by the time Dror has a reply to speak we are
-                // several awaits away from this tap. Priming the shared audio
-                // element + AudioContext here, synchronously, before opening
-                // the overlay, is what makes the voice loop audible on iPhone.
-                unlockAudio();
-                state.open('voice');
-              }}
+              onOrbClick={() => state.open('record')}
             />
           ) : state.screen === 'profile' && state.activePatient ? (
             <Profile
@@ -278,20 +267,6 @@ function AuthedApp({ user }: { user: User }) {
             setDraft={state.setDraft}
             goDraft={() => state.go('draft')}
             showToast={state.showToast}
-          />
-        )}
-
-        {state.overlay === 'voice' && (
-          <VoiceOverlay
-            patientId={undefined}
-            showToast={state.showToast}
-            onClose={() => {
-              // Mirrors the design mock's goHomeClose (line 726) — voice is
-              // only ever opened from Home this week, so closing it always
-              // returns there.
-              state.go('home');
-              state.close();
-            }}
           />
         )}
 

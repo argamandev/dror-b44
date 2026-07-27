@@ -5,7 +5,6 @@ import TopBar from '@/components/TopBar';
 interface HomeProps {
   homeOrb: 'idle' | 'thinking';
   onSearch: () => void;
-  onRecord: () => void;
   onMenu: () => void;
   onOrbClick: () => void;
 }
@@ -38,11 +37,11 @@ const helloTextStyle: CSSProperties = {
 
 const orbWrapStyle: CSSProperties = { cursor: 'pointer', marginTop: 44 };
 
-export default function Home({ homeOrb, onSearch, onRecord, onMenu, onOrbClick }: HomeProps) {
+export default function Home({ homeOrb, onSearch, onMenu, onOrbClick }: HomeProps) {
   return (
     <>
       <div style={bgStyle} />
-      <TopBar onSearch={onSearch} onRecord={onRecord} onMenu={onMenu} />
+      <TopBar onSearch={onSearch} onMenu={onMenu} />
       <div style={centerWrapStyle}>
         <div style={helloTextStyle}>איך אני יכול לעזור?</div>
         <div onClick={onOrbClick} style={orbWrapStyle}>

@@ -206,8 +206,8 @@ export default function ChatBar({
   const textRef = useRef(text);
   textRef.current = text;
 
-  // Task W5.4 — dictation into this input, separate from the orb's voice
-  // conversation (VoiceOverlay/useVoiceChat, opened from Home's orb only).
+  // Task W5.4 — dictation into this input, separate from the session
+  // recording flow (Home's orb → RecordOverlay).
   const dictation = useDictation({
     getValue: () => textRef.current,
     setValue: setText,
@@ -504,9 +504,9 @@ export default function ChatBar({
               </svg>
             </div>
             {/* Task W5.4: dictation into the input — tap speaks Hebrew into the
-                text, tap again stops. Separate from the orb's voice
-                conversation (Home's center orb → VoiceOverlay), which this
-                button never opens. */}
+                text, tap again stops. Separate from session recording
+                (Home's center orb → RecordOverlay), which this button
+                never opens. */}
             <div
               onClick={dictation.toggle}
               title={dictation.active ? 'עצירת הכתבה' : 'הכתבה קולית'}

@@ -18,7 +18,7 @@ import { deriveChatScope, type LiveChatLike } from '@/state/chatScope';
 import { composeDocMessage, type ChatDoc } from '@/state/docPrefix';
 
 export type Screen = 'home' | 'profile' | 'world' | 'chat' | 'draft';
-export type Overlay = null | 'menu' | 'search' | 'record' | 'voice' | 'flow' | 'settings' | 'appSettings';
+export type Overlay = null | 'menu' | 'search' | 'record' | 'flow' | 'settings' | 'appSettings';
 
 export interface Draft {
   id: string | null;

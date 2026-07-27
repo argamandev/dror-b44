@@ -47,10 +47,6 @@ describe('computeChromeColor', () => {
     expect(computeChromeColor('home', 'record')).toBe('#4a4a52');
   });
 
-  it('the voice overlay uses its own near-black tone regardless of screen', () => {
-    expect(computeChromeColor('home', 'voice')).toBe('#0c0c0e');
-  });
-
   it('the menu drawer (W5.9) is light — its ivory panel under the dawn glow, not the dark tone', () => {
     // R: 107*0.2 + 251*0.8 = 222.2 -> 222 -> 0xde
     // G: 113*0.2 + 246*0.8 = 219.4 -> 219 -> 0xdb

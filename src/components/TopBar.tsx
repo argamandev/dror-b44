@@ -1,12 +1,12 @@
 import type { CSSProperties } from 'react';
 
-// Home's icon row: search + record on one side, menu on the other.
-// Ported verbatim from the design mock (lines 53-65) — Dawn Break recolors
+// Home's icon row: search on one side, menu on the other.
+// Ported from the design mock (lines 53-65) — Dawn Break recolors
 // the icons to #17171b (v2 diff), row keeps dir="ltr" per the mock so icon
 // order matches the source design regardless of the app's RTL direction.
+// The mock's record mic was dropped: session recording starts from the orb.
 interface TopBarProps {
   onSearch: () => void;
-  onRecord: () => void;
   onMenu: () => void;
 }
 
@@ -31,23 +31,14 @@ const menuBtn: CSSProperties = {
   cursor: 'pointer',
 };
 
-export default function TopBar({ onSearch, onRecord, onMenu }: TopBarProps) {
+export default function TopBar({ onSearch, onMenu }: TopBarProps) {
   return (
     <div dir="ltr" style={rowStyle}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-        <div onClick={onSearch} className="pressable" style={iconBtn}>
-          <svg viewBox="0 0 24 24" fill="none" width={28} height={28}>
-            <circle cx={11} cy={11} r={7} stroke="#17171b" strokeWidth={2} />
-            <path d="M21 21L16.5 16.5" stroke="#17171b" strokeWidth={2} strokeLinecap="round" />
-          </svg>
-        </div>
-        <div onClick={onRecord} className="pressable" style={iconBtn}>
-          <svg viewBox="0 0 24 24" fill="none" width={28} height={28}>
-            <rect x={8} y={2} width={8} height={13} rx={4} stroke="#17171b" strokeWidth={2} />
-            <path d="M5 11a7 7 0 0014 0" stroke="#17171b" strokeWidth={2} strokeLinecap="round" />
-            <path d="M12 18v3" stroke="#17171b" strokeWidth={2} strokeLinecap="round" />
-          </svg>
-        </div>
+      <div onClick={onSearch} className="pressable" style={iconBtn}>
+        <svg viewBox="0 0 24 24" fill="none" width={28} height={28}>
+          <circle cx={11} cy={11} r={7} stroke="#17171b" strokeWidth={2} />
+          <path d="M21 21L16.5 16.5" stroke="#17171b" strokeWidth={2} strokeLinecap="round" />
+        </svg>
       </div>
       <div onClick={onMenu} className="pressable" style={menuBtn}>
         <svg viewBox="0 0 24 24" fill="none" width={22} height={22}>

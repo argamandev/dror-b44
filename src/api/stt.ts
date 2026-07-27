@@ -1,15 +1,14 @@
 import { base44 } from './base44Client';
 
-// Speech-to-text for the voice conversation overlay / session recorder
+// Speech-to-text for the session recorder and chat-bar dictation
 // (Task W5.1). Sends recorded patient audio to the `stt` Deno function
 // (base44/functions/stt/entry.ts), which is the ONLY thing allowed to talk
 // to ElevenLabs with that audio — never call any transcription vendor
 // directly from the browser.
 //
-// Mirrors src/api/tts.ts's function-invoke pattern, but (unlike tts, which
-// silently falls back to browser speechSynthesis) there is no client-side
-// fallback for transcription, so failures are surfaced as typed errors the
-// caller can branch on instead of being swallowed.
+// There is no client-side fallback for transcription, so failures are
+// surfaced as typed errors the caller can branch on instead of being
+// swallowed.
 
 export type SttErrorCode = 'no_key' | 'too_large' | 'stt_failed';
 
