@@ -159,7 +159,8 @@ function AuthedApp({ user }: { user: User }) {
             <Profile
               patient={state.activePatient}
               sessionCount={state.activeSessionCount}
-              onOpenSettings={() => state.open('settings')}
+              docCount={state.entries.filter((e) => e.type === 'doc' && !e.is_draft).length}
+              onOpenContext={() => state.open('settings')}
               onGoHome={() => state.go('home')}
               onOpenFlow={(type) => state.openFlow(type)}
               onGoWorld={() => state.go('world')}
@@ -245,7 +246,7 @@ function AuthedApp({ user }: { user: User }) {
             sessionCount={state.activeSessionCount}
             initialSource={state.flowSource}
             onClose={() => state.close()}
-            onDraftReady={({ title, body }) => {
+            onDraftReady={({ title, body, tags }) => {
               state.setDraft({
                 id: null,
                 type: state.flowType,
@@ -253,6 +254,9 @@ function AuthedApp({ user }: { user: User }) {
                 date: new Date().toISOString(),
                 title,
                 body,
+                tags: tags ?? [],
+                // Saving this draft destroys the recording it came from.
+                recordingId: state.flowRecordingId,
               });
               state.close();
               state.go('draft');
@@ -267,7 +271,7 @@ function AuthedApp({ user }: { user: User }) {
             onClose={() => state.close()}
             refreshPatients={state.refreshPatients}
             openPatient={state.openPatient}
-            startSummaryFlow={(source) => state.openFlow('summary', source)}
+            startSummaryFlow={(source, recordingId) => state.openFlow('summary', source, recordingId)}
             showToast={state.showToast}
           />
         )}

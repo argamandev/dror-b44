@@ -8,7 +8,8 @@
     "body":             { "type": "string", "default": "" },
     "is_draft":         { "type": "boolean", "default": false },
     "duration_seconds": { "type": "integer", "default": 0 },
-    "transcript":       { "type": "string", "default": "" }
+    "transcript":       { "type": "string", "default": "" },
+    "tags":             { "type": "array", "items": { "type": "string" }, "default": [] }
   },
   "required": ["patient_id", "type", "title", "entry_date"],
   "rls": {

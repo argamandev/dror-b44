@@ -23,8 +23,14 @@ html,body{
   width:100%;
   height:100%;
   overscroll-behavior:none;
-  background:var(--bg-warm);
 }
+
+/* Only html paints. body used to carry an opaque var(--bg-warm) of its own,
+   which sat ON TOP of the per-screen colour chromeColor.ts writes to
+   <html> — so any sliver the app frame didn't cover showed flat near-white,
+   including below the dark overlays (the founder's "white block"). With body
+   transparent, a sliver takes the current screen's own tone instead. */
+html{background:var(--bg-warm)}
 
 /* touch-action:manipulation kills the double-tap-to-zoom gesture and the
    ~300ms tap delay on mobile browsers — makes taps feel instant, like a

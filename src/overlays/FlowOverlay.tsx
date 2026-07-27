@@ -38,7 +38,8 @@ interface FlowOverlayProps {
    */
   initialSource?: string | null;
   onClose: () => void;
-  onDraftReady: (result: { title: string; body: string }) => void;
+  /** `tags` is present for summaries (from `summarize`) and empty for documents. */
+  onDraftReady: (result: { title: string; body: string; tags?: string[] }) => void;
   showToast: (text: string) => void;
 }
 

@@ -161,6 +161,7 @@ ${styleLine}${guide ? "דגשים מהמטפל/ת לסיכום הזה: " + guide
 שמור על ההפרדה בין שני החלקים: "רשומה רפואית" היא משפט תמציתי אחד בלבד, וכל שאר הפירוט שייך ל"רשומה אישית".
 
 שדה title: שורת כותרת קצרה בלבד (למשל "סיכום פגישה ${nextSession} — ${name}"), בלי שאר הסעיפים.
+שדה tags: מערך של עד שלושה נושאים קצרים בעברית (מילה או שתיים כל אחד) — בדיוק אותם נושאים שכתבת בסעיף "תסמינים ונושאים", בלי מילות קישור ובלי משפטים שלמים.
 כתוב בגוף שלישי, בטון מקצועי וחם, ללא שימוש באימוג'י, וללא הוספת עובדות שאינן מופיעות בחומר הגלם או ברשומות הקודמות שסופקו כאן.`;
 
     // NOTE: no `model` param — InvokeLLM does not accept one (base44-facts.md §5).
@@ -171,17 +172,31 @@ ${styleLine}${guide ? "דגשים מהמטפל/ת לסיכום הזה: " + guide
         properties: {
           title: { type: "string" },
           body: { type: "string" },
+          tags: { type: "array", items: { type: "string" } },
         },
-        required: ["title", "body"],
+        required: ["title", "body", "tags"],
       },
     });
 
-    const { title, body: resultBody } = (result ?? {}) as { title?: string; body?: string };
+    const {
+      title,
+      body: resultBody,
+      tags,
+    } = (result ?? {}) as { title?: string; body?: string; tags?: unknown };
     if (!title || !resultBody) {
       return Response.json({ error: "Empty response from the model" }, { status: 502 });
     }
 
-    return Response.json({ title, body: resultBody });
+    // Tags are the world screen's row headline, not the draft itself — a model
+    // that omits them (or returns something odd) must not fail the summary; the
+    // frontend falls back to parsing the body's own topics section.
+    const cleanTags = Array.isArray(tags)
+      ? tags.filter((t): t is string => typeof t === "string" && t.trim().length > 0)
+          .map((t) => t.trim())
+          .slice(0, 3)
+      : [];
+
+    return Response.json({ title, body: resultBody, tags: cleanTags });
   } catch (error) {
     return Response.json(
       { error: error instanceof Error ? error.message : String(error) },

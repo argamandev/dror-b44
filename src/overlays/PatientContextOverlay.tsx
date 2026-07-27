@@ -1,5 +1,5 @@
 import { useState, type CSSProperties } from 'react';
-import { updatePatientNotes, type Patient } from '@/api/data';
+import { updatePatientContext, type Patient } from '@/api/data';
 import { fullName } from '@/api/format';
 
 // Ported verbatim from the design mock (lines 457-470, "PATIENT SETTINGS").
@@ -80,6 +80,30 @@ const textareaStyle: CSSProperties = {
   boxSizing: 'border-box',
 };
 
+// The treatment-start month feeds the profile's subtitle ("בטיפול מאז יולי
+// 2026") — see format.ts's formatSince. A month input rather than free text so
+// the stored value is always the 'YYYY-MM' that helper expects; fontSize 16
+// keeps iOS from zooming the field on focus.
+const fieldLabelStyle: CSSProperties = {
+  marginTop: 18,
+  fontSize: 13,
+  color: '#9a9ca1',
+  textAlign: 'right',
+};
+
+const monthInputStyle: CSSProperties = {
+  marginTop: 8,
+  width: '100%',
+  border: 'none',
+  outline: 'none',
+  background: '#f6f5f7',
+  borderRadius: 16,
+  fontSize: 16,
+  color: '#17171b',
+  padding: '14px 18px',
+  boxSizing: 'border-box',
+};
+
 const saveBtnStyle: CSSProperties = {
   marginTop: 14,
   width: '100%',
@@ -95,13 +119,14 @@ const saveBtnStyle: CSSProperties = {
 
 export default function PatientContextOverlay({ patient, onClose, onSaved, showToast }: PatientContextOverlayProps) {
   const [text, setText] = useState(patient.context_notes);
+  const [since, setSince] = useState(patient.treatment_since ?? '');
   const [busy, setBusy] = useState(false);
 
   const handleSave = async () => {
     if (busy) return;
     setBusy(true);
     try {
-      await updatePatientNotes(patient.id, text);
+      await updatePatientContext(patient.id, text, since);
       onSaved();
     } catch {
       showToast('שגיאה בשמירה, נסו שוב');
@@ -130,6 +155,14 @@ export default function PatientContextOverlay({ patient, onClose, onSaved, showT
           value={text}
           onChange={(e) => setText(e.target.value)}
           style={textareaStyle}
+        />
+        <div style={fieldLabelStyle}>תחילת הטיפול</div>
+        <input
+          type="month"
+          dir="ltr"
+          value={since}
+          onChange={(e) => setSince(e.target.value)}
+          style={monthInputStyle}
         />
         <button type="button" onClick={handleSave} disabled={busy} className="pressable" style={saveBtnStyle}>
           שמירה

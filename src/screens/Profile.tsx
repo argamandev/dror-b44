@@ -1,204 +1,223 @@
 import type { CSSProperties } from 'react';
 import type { Patient } from '@/api/data';
-import { fullName } from '@/api/format';
+import { fullName, profileSubtitle } from '@/api/format';
 
-// Ported from the design mock (lines 74-105), restyled per the Dawn Break v2
-// diff: shorter indigo hero, icons moved into a right-side vertical column
-// (home above settings), dark title/subtitle instead of white-on-hero, and a
-// new pointer-events:none bottom glow layered above the action buttons.
+// Ported from the design mock's current revision (Dror.dc.html lines 76-122).
+// The old rounded indigo hero and the three white pill buttons are gone: the
+// screen is now the same full-bleed dawn gradient the world screen uses, a
+// single back chevron, the name over a "בטיפול מאז … · N פגישות" line, a
+// translucent context chip (which replaces the gear — the patient-context
+// overlay is reached only from here now), and three quiet label-over-title
+// rows with a leading chevron.
 interface ProfileProps {
   patient: Patient;
   sessionCount: number;
-  onOpenSettings: () => void;
+  /** Non-draft documents in this patient's file — the third row's meta line. */
+  docCount: number;
+  onOpenContext: () => void;
   onGoHome: () => void;
   onOpenFlow: (type: 'summary' | 'doc') => void;
   onGoWorld: () => void;
 }
 
-// Background layer: anchored at the frame's true top (y=0, under the status
-// bar) and EXTENDED by the safe-area inset rather than pushed down by it, so
-// its rounded bottom edge keeps the same distance below the content.
 const heroStyle: CSSProperties = {
   position: 'absolute',
-  top: 0,
-  left: 0,
-  right: 0,
-  height: 'calc(var(--top-inset) + 186px)',
+  inset: 0,
   zIndex: 0,
-  borderRadius: '0 0 44px 44px',
+  opacity: 0.35,
   background:
-    'radial-gradient(170% 150% at 50% -42%, rgba(107,113,246,0.96) 0%, rgba(169,185,249,0.88) 34%, rgba(240,228,232,0.78) 58%, rgba(246,217,196,0.62) 80%, rgba(246,217,196,0.42) 100%), #faf8fa',
-  boxShadow: '0 14px 34px -18px rgba(107,113,246,0.35)',
+    'radial-gradient(108% 48% at 50% -4%, rgba(107,113,246,0.95) 0%, rgba(169,185,249,0.85) 30%, rgba(240,228,232,0.75) 55%, rgba(246,217,196,0.5) 70%, rgba(246,217,196,0) 82%), #faf8fa',
 };
 
-// Right-side vertical icon column (v2 diff) — replaces the old left/right
-// justify-content:space-between row.
-const iconColStyle: CSSProperties = {
+const topRowStyle: CSSProperties = {
   position: 'absolute',
-  top: 'calc(var(--top-inset) + 58px)',
+  top: 'calc(var(--top-inset) + 66px)',
+  left: 24,
   right: 24,
   zIndex: 5,
   display: 'flex',
-  flexDirection: 'column',
   alignItems: 'center',
-  gap: 12,
+  justifyContent: 'space-between',
 };
 
-const homeBtnStyle: CSSProperties = {
-  width: 32,
-  height: 32,
+const backBtnStyle: CSSProperties = {
+  width: 44,
+  height: 44,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   cursor: 'pointer',
 };
 
-const gearBtnStyle: CSSProperties = {
-  width: 32,
-  height: 32,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  cursor: 'pointer',
-};
-
-const nameWrapStyle: CSSProperties = {
+const headerStyle: CSSProperties = {
   position: 'absolute',
-  top: 'calc(var(--top-inset) + 92px)',
+  top: 'calc(var(--top-inset) + 116px)',
   left: 0,
   right: 0,
   zIndex: 4,
-  textAlign: 'center',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
 };
 
 const nameStyle: CSSProperties = {
   fontFamily: "'Frank Ruhl Libre',serif",
-  fontSize: 38,
+  fontSize: 29,
   fontWeight: 500,
   color: '#17171b',
-  lineHeight: 1.1,
 };
 
 const subStyle: CSSProperties = {
-  fontSize: 15,
-  fontWeight: 500,
-  color: '#17171b',
-  marginTop: 4,
+  fontSize: 13,
+  color: '#8f8b85',
+  marginTop: 2,
+  letterSpacing: '0.01em',
 };
 
-const actionsWrapStyle: CSSProperties = {
-  position: 'absolute',
-  top: 'calc(var(--top-inset) + 220px)',
-  left: 24,
-  right: 24,
-  zIndex: 4,
+const chipStyle: CSSProperties = {
+  marginTop: 14,
   display: 'flex',
-  flexDirection: 'column',
-  gap: 14,
+  alignItems: 'center',
+  gap: 7,
+  background: 'rgba(255,255,255,0.72)',
+  borderRadius: 999,
+  padding: '7px 14px 7px 12px',
+  cursor: 'pointer',
+  boxShadow: '0 0 0 1px rgba(23,23,27,0.05)',
+  backdropFilter: 'blur(6px)',
+  WebkitBackdropFilter: 'blur(6px)',
 };
 
-// New bottom glow (v2 diff) — sits above everything, but pointer-events:none
-// so it never blocks the action buttons underneath it.
+const chipLabelStyle: CSSProperties = { fontSize: 12.5, fontWeight: 600, color: '#3a3a3f' };
+
+// Scrolls inside itself rather than growing the screen — same bottom
+// clearance the world's list uses (the ChatBar's own edge + its height + the
+// mock's gap).
+const rowsWrapStyle: CSSProperties = {
+  position: 'absolute',
+  top: 'calc(var(--top-inset) + 248px)',
+  bottom: 'calc(var(--chatbar-bottom) + 126px)',
+  left: 20,
+  right: 20,
+  zIndex: 4,
+  overflowY: 'auto',
+  padding: '2px 2px 16px',
+};
+
+const rowStyle: CSSProperties = {
+  position: 'relative',
+  cursor: 'pointer',
+  padding: '15px 22px 17px 10px',
+  marginBottom: 16,
+  borderRadius: '0 16px 16px 0',
+};
+
+const rowInnerStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 12,
+};
+
+const rowTextStyle: CSSProperties = { minWidth: 0 };
+const rowMetaStyle: CSSProperties = { fontSize: 11.5, color: '#a9a49d', letterSpacing: '0.01em' };
+const rowTitleStyle: CSSProperties = { fontSize: 15.5, fontWeight: 600, color: '#2b2b30', marginTop: 7 };
+
 const bottomGlowStyle: CSSProperties = {
   position: 'absolute',
   left: 0,
   right: 0,
   bottom: 0,
   height: 225,
-  zIndex: 5,
+  zIndex: 3,
   pointerEvents: 'none',
   background:
     'radial-gradient(120% 95% at 50% 108%, rgba(169,185,249,0.48) 0%, rgba(240,228,232,0.34) 40%, rgba(246,217,196,0.20) 62%, rgba(246,217,196,0) 100%)',
 };
 
-const actionBtnStyle: CSSProperties = {
-  background: '#ffffff',
-  borderRadius: 999,
-  height: 64,
-  padding: '0 26px',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 15,
-  cursor: 'pointer',
-  boxShadow: '0 10px 26px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04)',
-};
-
-const actionLabelStyle: CSSProperties = { fontSize: 17, fontWeight: 600, color: '#17171b' };
+function RowChevron() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" width={15} height={15} style={{ flex: 'none' }}>
+      <path d="M15 6l-6 6 6 6" stroke="#c3beb7" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 export default function Profile({
   patient,
   sessionCount,
-  onOpenSettings,
+  docCount,
+  onOpenContext,
   onGoHome,
   onOpenFlow,
   onGoWorld,
 }: ProfileProps) {
   const name = fullName(patient);
+  const hasContext = patient.context_notes.trim().length > 0;
 
   return (
     <>
       <div style={heroStyle} />
-      <div style={iconColStyle}>
-        <div onClick={onGoHome} title="חזרה לבית" style={homeBtnStyle}>
-          <svg viewBox="0 0 24 24" fill="none" width={23} height={23}>
-            <path
-              d="M4 10.5L12 4l8 6.5V20h-5.5v-5h-5v5H4V10.5z"
-              stroke="#17171b"
-              strokeWidth={2}
-              strokeLinejoin="round"
-            />
-          </svg>
-        </div>
-        <div onClick={onOpenSettings} style={gearBtnStyle}>
-          <svg viewBox="0 0 24 24" fill="none" width={25} height={25}>
-            <path d="M12 8.6a3.4 3.4 0 100 6.8 3.4 3.4 0 000-6.8z" stroke="#17171b" strokeWidth={2} />
-            <path
-              d="M19.4 12a7.4 7.4 0 00-.1-1.2l2-1.5-2-3.4-2.3 1a7.5 7.5 0 00-2.1-1.2L14.5 3h-4l-.4 2.7a7.5 7.5 0 00-2.1 1.2l-2.3-1-2 3.4 2 1.5a7.4 7.4 0 000 2.4l-2 1.5 2 3.4 2.3-1c.64.5 1.35.9 2.1 1.2l.4 2.7h4l.4-2.7a7.5 7.5 0 002.1-1.2l2.3 1 2-3.4-2-1.5c.07-.4.1-.8.1-1.2z"
-              stroke="#17171b"
-              strokeWidth={2}
-              strokeLinejoin="round"
-            />
+      <div dir="ltr" style={topRowStyle}>
+        <div />
+        <div onClick={onGoHome} title="חזרה לבית" style={backBtnStyle}>
+          <svg viewBox="0 0 24 24" fill="none" width={24} height={24}>
+            <path d="M9 6l6 6-6 6" stroke="#17171b" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
       </div>
-      <div style={nameWrapStyle}>
+
+      <div style={headerStyle}>
         <div style={nameStyle}>{name}</div>
-        <div style={subStyle}>{sessionCount} פגישות</div>
-      </div>
-      <div style={actionsWrapStyle}>
-        <div onClick={() => onOpenFlow('summary')} className="pressable" style={actionBtnStyle}>
-          <svg viewBox="0 0 24 24" fill="none" width={22} height={22}>
+        <div style={subStyle}>{profileSubtitle(patient.treatment_since, sessionCount)}</div>
+        <div onClick={onOpenContext} className="pressable" style={chipStyle}>
+          <svg viewBox="0 0 24 24" fill="none" width={14} height={14} style={{ flex: 'none' }}>
             <path
-              d="M4 20l1.2-4.2L16.6 4.4a2 2 0 012.9 0l0.1 0.1a2 2 0 010 2.9L8.2 18.8 4 20z"
-              stroke="#17171b"
-              strokeWidth={2}
+              d="M6 3.5h12a1.5 1.5 0 011.5 1.5v14a1.5 1.5 0 01-1.5 1.5H6A1.5 1.5 0 014.5 19V5A1.5 1.5 0 016 3.5z"
+              stroke="#7d7f85"
+              strokeWidth={1.8}
               strokeLinejoin="round"
             />
-            <path d="M14.5 6.5l3 3" stroke="#17171b" strokeWidth={2} />
+            <path d="M8.5 9h7M8.5 12.5h7M8.5 16h4" stroke="#7d7f85" strokeWidth={1.8} strokeLinecap="round" />
           </svg>
-          <span style={actionLabelStyle}>יצירת סיכום פגישה</span>
-        </div>
-        <div onClick={() => onOpenFlow('doc')} className="pressable" style={actionBtnStyle}>
-          <svg viewBox="0 0 24 24" fill="none" width={22} height={22}>
-            <path d="M6 2.8h8l4 4v14.4H6V2.8z" stroke="#17171b" strokeWidth={2} strokeLinejoin="round" />
-            <path d="M14 2.8v4h4" stroke="#17171b" strokeWidth={2} strokeLinejoin="round" />
-            <path d="M9 12h6M9 16h6" stroke="#17171b" strokeWidth={2} strokeLinecap="round" />
-          </svg>
-          <span style={actionLabelStyle}>יצירת מסמך רשמי</span>
-        </div>
-        <div onClick={onGoWorld} className="pressable" style={actionBtnStyle}>
-          <svg viewBox="0 0 24 24" fill="none" width={22} height={22}>
-            <circle cx={12} cy={8} r={4} stroke="#17171b" strokeWidth={2} />
-            <path
-              d="M4.5 20.5c1.3-3.4 4.1-5 7.5-5s6.2 1.6 7.5 5"
-              stroke="#17171b"
-              strokeWidth={2}
-              strokeLinecap="round"
-            />
-          </svg>
-          <span style={actionLabelStyle}>העולם של {name}</span>
+          <span style={chipLabelStyle}>
+            {hasContext ? 'הקשר על המטופל · מוגדר' : 'הוספת הקשר על המטופל'}
+          </span>
         </div>
       </div>
+
+      <div className="scroll-touch" style={rowsWrapStyle}>
+        <div onClick={() => onOpenFlow('summary')} className="pressable" style={rowStyle}>
+          <div style={rowInnerStyle}>
+            <div style={rowTextStyle}>
+              <div style={rowMetaStyle}>הקלטה או נקודות מהפגישה</div>
+              <div style={rowTitleStyle}>יצירת סיכום פגישה</div>
+            </div>
+            <RowChevron />
+          </div>
+        </div>
+        <div onClick={() => onOpenFlow('doc')} className="pressable" style={rowStyle}>
+          <div style={rowInnerStyle}>
+            <div style={rowTextStyle}>
+              <div style={rowMetaStyle}>אישור, חוות דעת או מכתב</div>
+              <div style={rowTitleStyle}>יצירת מסמך רשמי</div>
+            </div>
+            <RowChevron />
+          </div>
+        </div>
+        <div onClick={onGoWorld} className="pressable" style={rowStyle}>
+          <div style={rowInnerStyle}>
+            <div style={rowTextStyle}>
+              <div style={rowMetaStyle}>
+                {sessionCount} סיכומים · {docCount} מסמכים
+              </div>
+              <div style={rowTitleStyle}>העולם של {name}</div>
+            </div>
+            <RowChevron />
+          </div>
+        </div>
+      </div>
+
       <div style={bottomGlowStyle} />
     </>
   );

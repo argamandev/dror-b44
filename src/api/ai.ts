@@ -144,6 +144,8 @@ export interface SummarizeSessionArgs {
 export interface SummarizeSessionResult {
   title: string;
   body: string;
+  /** Up to three short topics; absent/odd values become [] rather than an error. */
+  tags: string[];
 }
 
 export async function summarizeSession(args: SummarizeSessionArgs): Promise<SummarizeSessionResult> {
@@ -159,7 +161,10 @@ export async function summarizeSession(args: SummarizeSessionArgs): Promise<Summ
   if (!result || typeof result.title !== 'string' || typeof result.body !== 'string') {
     throw new Error('SUMMARIZE_FAILED');
   }
-  return { title: result.title, body: result.body };
+  const tags = Array.isArray(result.tags)
+    ? result.tags.filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
+    : [];
+  return { title: result.title, body: result.body, tags };
 }
 
 // Transport to the `document` Deno function (base44/functions/document/entry.ts).

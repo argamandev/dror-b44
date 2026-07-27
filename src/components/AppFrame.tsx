@@ -17,11 +17,19 @@ import type { CSSProperties, ReactNode } from 'react';
 // containing block's PADDING box, which includes the padding — but it read as
 // if the frame handled the inset, and body's padding then applied a second
 // one on top of it.)
+// The frame FILLS the pinned document rather than measuring the viewport
+// itself: html/body are `position:fixed; inset:0` and #root is `height:100%`
+// (base.css), so `height:100%` here is exact by construction. `100dvh` was
+// not — on the founder's installed PWA it resolved a few points short of the
+// physical bottom, and the uncovered strip showed body's opaque near-white
+// as a white block under every screen (and, since an overlay's scrim is
+// `inset:0` INSIDE this frame, under the dark overlays too).
 const frameStyle: CSSProperties = {
   position: 'relative',
   maxWidth: 430,
   margin: '0 auto',
-  minHeight: '100dvh',
+  height: '100%',
+  minHeight: '100%',
   overflow: 'hidden',
   background: 'var(--bg-warm)',
   boxShadow: '0 0 60px rgba(0,0,0,0.10)',

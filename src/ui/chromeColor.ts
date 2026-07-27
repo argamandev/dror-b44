@@ -89,10 +89,11 @@ const SCREEN_COLOR_SPECS: Record<ChromeScreen, ScreenColorSpec> = {
   // blendOver returns it untouched regardless of bg. This is also the
   // <meta name="theme-color"> index.html already ships by default.
   home: { fg: { r: 107, g: 113, b: 246, a: 1 }, bg: '#faf8fa' },
-  // Profile.tsx heroStyle (~line 27): radial-gradient(... at 50% -42%, ...)
-  // peak stop rgba(107,113,246,0.96), no wrapping opacity, over its own
-  // #faf8fa fallback.
-  profile: { fg: { r: 107, g: 113, b: 246, a: 0.96 }, bg: '#faf8fa' },
+  // Profile.tsx heroStyle: since the design import it is the SAME full-bleed
+  // gradient World uses, wrapped in `opacity: 0.35` — so it takes World's
+  // treatment (the wrapper opacity as the effective alpha) rather than the
+  // old rounded hero's 0.96.
+  profile: { fg: { r: 107, g: 113, b: 246, a: 0.35 }, bg: '#faf8fa' },
   // PatientChat.tsx glowStyle (~line 27): radial-gradient(... at 50% -50%,
   // ...) peak stop rgba(107,113,246,0.5), over the screen's flat #fbfafb
   // background (bgStyle).

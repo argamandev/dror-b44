@@ -5,6 +5,8 @@ export interface Patient {
   first_name: string;
   last_name: string;
   context_notes: string;
+  /** 'YYYY-MM', or '' when the therapist hasn't set a treatment start. */
+  treatment_since: string;
 }
 
 export type EntryType = 'summary' | 'doc' | 'rec';
@@ -19,6 +21,8 @@ export interface Entry {
   is_draft: boolean;
   duration_seconds: number;
   transcript: string;
+  /** Up to three short topics, written by `summarize`; the world screen's row headline. */
+  tags: string[];
 }
 
 export interface ChatMsg {
@@ -66,10 +70,24 @@ export const auth = {
 export const listPatients = (): Promise<Patient[]> => base44.entities.Patient.list();
 
 export const createPatient = (first: string, last: string): Promise<Patient> =>
-  base44.entities.Patient.create({ first_name: first, last_name: last, context_notes: '' });
+  base44.entities.Patient.create({
+    first_name: first,
+    last_name: last,
+    context_notes: '',
+    treatment_since: '',
+  });
 
-export const updatePatientNotes = (id: string, notes: string): Promise<void> =>
-  base44.entities.Patient.update(id, { context_notes: notes }).then(() => undefined);
+// Both fields the patient-context overlay owns, written together.
+// treatment_since is 'YYYY-MM' (or '' when unset) — see format.ts's formatSince.
+export const updatePatientContext = (
+  id: string,
+  notes: string,
+  treatmentSince: string
+): Promise<void> =>
+  base44.entities.Patient.update(id, {
+    context_notes: notes,
+    treatment_since: treatmentSince,
+  }).then(() => undefined);
 
 // Sort and limit are passed explicitly (rather than relying on the SDK's
 // filter() defaults of '-created_date' and limit 50) so a patient's world,
@@ -82,6 +100,11 @@ export const createEntry = (e: Omit<Entry, 'id'>): Promise<Entry> => base44.enti
 
 export const updateEntry = (id: string, patch: Partial<Entry>): Promise<void> =>
   base44.entities.Entry.update(id, patch).then(() => undefined);
+
+// Used for exactly one thing: destroying a session recording once the summary
+// written from it has been saved (useAppState's saveDraft).
+export const deleteEntry = (id: string): Promise<void> =>
+  base44.entities.Entry.delete(id).then(() => undefined);
 
 export const listChats = (): Promise<Chat[]> => base44.entities.Chat.list('-updated_date', 5000);
 

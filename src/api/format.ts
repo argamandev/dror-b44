@@ -33,3 +33,53 @@ export function sessionCount(entries: { type: string; is_draft?: boolean }[]): n
 export function chipLabel(t: string): string {
   return t === 'doc' ? 'מסמך רשמי' : t === 'rec' ? 'הקלטה' : 'סיכום פגישה';
 }
+
+const HEB_MONTHS = [
+  'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
+  'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר',
+];
+
+export function hebrewMonth(month: number): string {
+  return HEB_MONTHS[month - 1] ?? '';
+}
+
+// Patient.treatment_since holds 'YYYY-MM' — what the month input in the
+// patient-context overlay produces. Anything else is treated as unset rather
+// than guessed at: the profile subtitle simply drops the phrase.
+export function formatSince(value: string | undefined): string {
+  const m = /^(\d{4})-(\d{2})$/.exec((value ?? '').trim());
+  if (!m) return '';
+  const name = hebrewMonth(Number(m[2]));
+  return name ? `בטיפול מאז ${name} ${m[1]}` : '';
+}
+
+export function profileSubtitle(since: string | undefined, sessions: number): string {
+  const head = formatSince(since);
+  const tail = `${sessions} פגישות`;
+  return head ? `${head} · ${tail}` : tail;
+}
+
+// The world screen's row headline. Stored tags (written by `summarize`) win;
+// entries created before that field existed fall back to the summary's own
+// topics section, and anything else — documents, free-form bodies — to the
+// title. A row is never blank.
+const TOPICS_HEADING = 'תסמינים ונושאים';
+
+function parseTopics(body: string): string[] {
+  const idx = body.indexOf(TOPICS_HEADING);
+  if (idx === -1) return [];
+  const after = body.slice(idx + TOPICS_HEADING.length).replace(/^\s*:?/, '');
+  const block = after.split(/\n\s*\n/)[0] ?? '';
+  return block
+    .split(/[,\n·]/)
+    .map(s => s.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
+export function topicTags(entry: { tags?: string[]; body?: string; title: string }): string[] {
+  const stored = (entry.tags ?? []).map(t => t.trim()).filter(Boolean);
+  if (stored.length) return stored.slice(0, 3);
+  const parsed = parseTopics(entry.body ?? '');
+  return parsed.length ? parsed : [entry.title];
+}

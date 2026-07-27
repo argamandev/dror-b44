@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { createPatient, type Patient } from '@/api/data';
+import { createEntry, createPatient, type Patient } from '@/api/data';
 import { fullName, fmtTimer } from '@/api/format';
 import {
   useSessionRecorder,
@@ -20,9 +20,9 @@ import { getMicGuidance } from '@/hooks/micCopy';
 // that patient's own summary flow (FlowOverlay, seeded at its guide step),
 // so a recording started from the home orb ends in exactly the same
 // structured summary as one started from the patient's profile, through the
-// same code. The recording is never filed as an entry of its own — the
-// summary is what belongs in the file, and the therapist reviews and saves
-// it at the end of that flow.
+// same code. The recording is filed first as a `rec` entry, purely so an
+// abandoned flow can't lose the session — it is listed nowhere in the app,
+// and saveDraft destroys it the moment the summary is saved.
 type RecordPhase = 'rec' | 'assign';
 
 interface RecordOverlayProps {
@@ -31,7 +31,7 @@ interface RecordOverlayProps {
   refreshPatients: () => Promise<void>;
   openPatient: (id: string) => Promise<void>;
   /** Opens the patient's summary flow with the recorded transcript as its source. */
-  startSummaryFlow: (source: string) => void;
+  startSummaryFlow: (source: string, recordingId: string | null) => void;
   showToast: (text: string) => void;
 }
 
@@ -282,8 +282,11 @@ export default function RecordOverlay({
   const recorder = useSessionRecorder();
 
   const [phase, setPhase] = useState<RecordPhase>('rec');
-  // The finished recording's text, held until a patient is picked for it.
-  const [saved, setSaved] = useState('');
+  // The finished recording, held until a patient is picked for it.
+  const [saved, setSaved] = useState<{ seconds: number; transcript: string }>({
+    seconds: 0,
+    transcript: '',
+  });
   const [q, setQ] = useState('');
   const [first, setFirst] = useState('');
   const [last, setLast] = useState('');
@@ -333,7 +336,7 @@ export default function RecordOverlay({
     const result = await recorder.stop();
     if (closedRef.current) return;
     if (result.transcriptionFailed) showToast(RECORDED_TRANSCRIPTION_FAILED_TOAST);
-    setSaved(result.transcript);
+    setSaved({ seconds: result.seconds, transcript: result.transcript });
     setPhase('assign');
   };
 
@@ -356,15 +359,33 @@ export default function RecordOverlay({
   };
 
   // Shared by both assign paths (picking an existing result, or creating a
-  // new patient inline) — makes the patient active and continues straight
-  // into their own summary flow with the transcript. The recording itself is
-  // never filed as an entry: what belongs in the file is the summary, which
-  // the therapist reviews and saves at the end of that flow.
+  // new patient inline) — files the recording, then continues into the
+  // patient's own summary flow with the transcript. The recording is a safety
+  // net rather than a record: it is never listed anywhere in the app, and
+  // saveDraft destroys it the moment the summary written from it is saved.
   const finishAssign = async (patient: Patient) => {
     setBusy(true);
+    let recordingId: string | null = null;
+    try {
+      const rec = await createEntry({
+        patient_id: patient.id,
+        type: 'rec',
+        title: 'הקלטת פגישה',
+        entry_date: new Date().toISOString(),
+        body: 'הקלטה באורך ' + fmtTimer(saved.seconds),
+        is_draft: false,
+        duration_seconds: saved.seconds,
+        transcript: saved.transcript,
+        tags: [],
+      });
+      recordingId = rec.id;
+    } catch {
+      // Filing it failed — the transcript is still in hand, so the summary
+      // flow opens anyway rather than losing the session over a safety net.
+    }
     await openPatient(patient.id);
     if (closedRef.current) return;
-    startSummaryFlow(saved);
+    startSummaryFlow(saved.transcript, recordingId);
   };
 
   const handleAssignExisting = (patient: Patient) => {

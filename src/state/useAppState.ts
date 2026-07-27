@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   createChat,
   createEntry,
+  deleteEntry,
   listChats,
   listEntries,
   listPatients,
@@ -27,6 +28,14 @@ export interface Draft {
   date: string;
   title: string;
   body: string;
+  /** Topic tags from `summarize`; persisted with the entry and shown in the world. */
+  tags?: string[];
+  /**
+   * The session recording this draft was written from, when it came from one.
+   * Deleted the moment this draft is saved — a raw transcript never outlives
+   * the summary made from it.
+   */
+  recordingId?: string | null;
 }
 
 // The live conversation the 'chat' screen renders. `id` is our Chat entity
@@ -66,6 +75,9 @@ export function useAppState() {
   // recording produced no text. null means an ordinary flow started from the
   // patient's own profile.
   const [flowSource, setFlowSource] = useState<string | null>(null);
+  // The recording that seeded the flow, carried so the draft it produces knows
+  // which entry to destroy once it is saved.
+  const [flowRecordingId, setFlowRecordingId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [homeOrb, setHomeOrb] = useState<'idle' | 'thinking'>('idle');
   const [activeChat, setActiveChat] = useState<ActiveChat>(EMPTY_CHAT);
@@ -176,9 +188,10 @@ export function useAppState() {
   // (home-screen); omitted, the flow starts at its first step as it always
   // has.
   const openFlow = useCallback(
-    (type: Draft['type'], source: string | null = null) => {
+    (type: Draft['type'], source: string | null = null, recordingId: string | null = null) => {
       setFlowType(type);
       setFlowSource(source);
+      setFlowRecordingId(recordingId);
       setOverlay('flow');
     },
     []
@@ -224,11 +237,19 @@ export function useAppState() {
             is_draft: asDraft,
             duration_seconds: 0,
             transcript: '',
+            tags: draft.tags ?? [],
           });
         }
       } catch {
         showToast(SAVE_ERROR);
         return;
+      }
+      // The summary now exists in the file, so the recording it was written
+      // from is destroyed — a raw session transcript never outlives its
+      // summary. A failed delete is swallowed: the therapist's summary is
+      // saved either way, and the recording is not reachable from the UI.
+      if (draft.recordingId) {
+        await deleteEntry(draft.recordingId).catch(() => {});
       }
       const p = patients.find((pt) => pt.id === draft.patientId);
       setActiveIdBoth(draft.patientId);
@@ -422,6 +443,7 @@ export function useAppState() {
     draftFrom,
     flowType,
     flowSource,
+    flowRecordingId,
     toast,
     activePatient,
     activeSessionCount,

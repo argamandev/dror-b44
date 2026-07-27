@@ -3,7 +3,8 @@
   "properties": {
     "first_name":    { "type": "string" },
     "last_name":     { "type": "string" },
-    "context_notes": { "type": "string", "default": "" }
+    "context_notes":   { "type": "string", "default": "" },
+    "treatment_since": { "type": "string", "default": "" }
   },
   "required": ["first_name"],
   "rls": {
