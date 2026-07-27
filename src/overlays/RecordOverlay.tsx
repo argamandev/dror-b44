@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createEntry, createPatient, type Patient } from '@/api/data';
 import { fullName, fmtTimer } from '@/api/format';
-import { summarizeSession } from '@/api/ai';
 import {
   useSessionRecorder,
   TRANSCRIPT_UNAVAILABLE_NOTICE,
@@ -9,8 +8,6 @@ import {
   RECORDED_TRANSCRIPTION_FAILED_TOAST,
 } from '@/hooks/useSessionRecorder';
 import { getMicGuidance } from '@/hooks/micCopy';
-import type { Draft } from '@/state/useAppState';
-import { SUMMARY_STATUS_LINE } from '@/state/statusLine';
 
 // Ported verbatim from the design mock (lines 224-278, semantics 709/731-752).
 // Recording starts the instant the overlay opens (mock's openRecord, line
@@ -20,24 +17,25 @@ import { SUMMARY_STATUS_LINE } from '@/state/statusLine';
 // here is "שיוך ההקלטה" rather than a session count, since patient session
 // counts aren't loaded for this list (avoids an N+1 load just for a label).
 // Assigning (existing or freshly-created patient) saves the recording as a
-// `rec` Entry, then — the bonus step the mock only fakes — if it produced a
-// transcript, immediately asks Dror to draft a summary from it and opens
-// that draft; an empty transcript (unsupported browser, or a mic error that
-// still got assigned) just saves the entry and returns to the profile.
-type RecordPhase = 'rec' | 'assign' | 'generating';
+// `rec` Entry, then — when there is a transcript to work from — hands it to
+// the patient's own summary flow (FlowOverlay, seeded at its guide step), so
+// a recording started from the home orb ends in exactly the same structured
+// summary as one started from the patient's profile, through the same code.
+// An empty transcript (unsupported browser, or a mic error that still got
+// assigned) just saves the entry and returns to the profile.
+type RecordPhase = 'rec' | 'assign';
 
 interface RecordOverlayProps {
   patients: Patient[];
   onClose: () => void;
   refreshPatients: () => Promise<void>;
   openPatient: (id: string) => Promise<void>;
-  setDraft: (draft: Draft | null) => void;
-  goDraft: () => void;
+  /** Opens the patient's summary flow with the recorded transcript as its source. */
+  startSummaryFlow: (source: string) => void;
   showToast: (text: string) => void;
 }
 
 const SAVE_ERROR = 'שגיאה בשמירה, נסו שוב';
-const SUMMARIZE_FAILED_TOAST = 'ההקלטה נשמרה; דרור לא הצליח לנסח כרגע';
 
 const backdropStyle: CSSProperties = {
   position: 'absolute',
@@ -257,7 +255,7 @@ const addBtnStyle: CSSProperties = {
   cursor: 'pointer',
 };
 
-// -- generating phase (mirrors FlowOverlay's) --
+// -- transcribing state (mirrors FlowOverlay's generating panel) --
 const generatingWrapStyle: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
@@ -278,8 +276,7 @@ export default function RecordOverlay({
   onClose,
   refreshPatients,
   openPatient,
-  setDraft,
-  goDraft,
+  startSummaryFlow,
   showToast,
 }: RecordOverlayProps) {
   const recorder = useSessionRecorder();
@@ -392,27 +389,12 @@ export default function RecordOverlay({
       return;
     }
 
-    setPhase('generating');
-    try {
-      const result = await summarizeSession({ patientId: patient.id, source: transcript, guide: '' });
-      if (closedRef.current) return;
-      await openPatient(patient.id);
-      setDraft({
-        id: null,
-        type: 'summary',
-        patientId: patient.id,
-        date: new Date().toISOString(),
-        title: result.title,
-        body: result.body,
-      });
-      goDraft();
-      onClose();
-    } catch {
-      if (closedRef.current) return;
-      showToast(SUMMARIZE_FAILED_TOAST);
-      await openPatient(patient.id);
-      onClose();
-    }
+    // Make the patient active, then hand the transcript to their own summary
+    // flow — the drafting itself lives there and only there, so both entry
+    // points share one implementation and one result.
+    await openPatient(patient.id);
+    if (closedRef.current) return;
+    startSummaryFlow(transcript);
   };
 
   const handleAssignExisting = (patient: Patient) => {
@@ -554,13 +536,6 @@ export default function RecordOverlay({
               )}
             </div>
           )}
-        </div>
-      )}
-
-      {phase === 'generating' && (
-        <div style={generatingWrapStyle}>
-          <dror-orb size="120" state="thinking" />
-          <div style={generatingTextStyle}>{SUMMARY_STATUS_LINE}</div>
         </div>
       )}
     </div>

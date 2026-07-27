@@ -26,6 +26,14 @@ interface FlowOverlayProps {
   patient: Patient;
   /** This patient's non-draft session-summary count (mock's `p.sessions`) — sizes the docS3 meeting chips/subtitles. */
   sessionCount: number;
+  /**
+   * A transcript captured elsewhere (the home orb's RecordOverlay, once it
+   * has been assigned to this patient). When set, the summary flow skips
+   * straight to step 3 with this text as its source, so a recording made
+   * from the home screen goes through this exact flow — same UI, same
+   * generation, same draft — instead of a parallel one.
+   */
+  initialSource?: string;
   onClose: () => void;
   onDraftReady: (result: { title: string; body: string }) => void;
   showToast: (text: string) => void;
@@ -312,12 +320,17 @@ export default function FlowOverlay({
   onClose,
   onDraftReady,
   showToast,
+  initialSource,
 }: FlowOverlayProps) {
   const name = fullName(patient);
   const recorder = useSessionRecorder();
 
-  const [step, setStep] = useState<FlowStep>(1);
-  const [method, setMethod] = useState<FlowMethod>(null);
+  // Read once on mount: the seeded transcript is a starting condition, not a
+  // live input — later prop changes must not yank the therapist mid-step.
+  const [seededSource] = useState(() => (initialSource ?? '').trim());
+
+  const [step, setStep] = useState<FlowStep>(seededSource ? 3 : 1);
+  const [method, setMethod] = useState<FlowMethod>(seededSource ? 'record' : null);
   const [notes, setNotes] = useState('');
   const [guide, setGuide] = useState('');
   const [generating, setGenerating] = useState(false);
@@ -411,7 +424,7 @@ export default function FlowOverlay({
   // Strictly scoped to the active method — an abandoned recording's
   // transcript (or leftover typed notes from before a method switch) must
   // never leak in as the source for the other method.
-  const source = method === 'record' ? recorder.transcript.trim() : notes.trim();
+  const source = seededSource || (method === 'record' ? recorder.transcript.trim() : notes.trim());
   const sourceEmpty = !source;
 
   const handleCreateDraft = async () => {
@@ -471,7 +484,9 @@ export default function FlowOverlay({
 
   const title = flowType === 'doc' ? 'מסמך רשמי' : 'סיכום פגישה';
   const sub = `עבור ${name}`;
-  const backable = !generating && step > 1;
+  // A seeded flow has no steps 1-2 to go back to — the recording already
+  // happened, in the overlay that handed the transcript over.
+  const backable = !generating && step > 1 && !seededSource;
   // Task W5.7: name the actual work in the generating-state status line
   // rather than a generic "…את הטיוטה…" — which document type (docS1's
   // chosen/typed docType) for the doc flow, the fixed summary line otherwise.
@@ -640,7 +655,14 @@ export default function FlowOverlay({
               style={docTypeInputStyle}
             />
             <div style={chipsRowStyle}>
-              {['אישור טיפול', 'מכתב לקופת חולים', 'מסמך אינטייק', 'חוות דעת'].map((label) => (
+              {[
+                'מכתב לצבא',
+                'מכתב לביטוח לאומי',
+                'אישור טיפול',
+                'מכתב לקופת חולים',
+                'מסמך אינטייק',
+                'חוות דעת',
+              ].map((label) => (
                 <div key={label} onClick={() => handlePickDocTypeChip(label)} style={docTypeChipStyle}>
                   {label}
                 </div>

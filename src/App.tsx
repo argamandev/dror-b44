@@ -243,6 +243,7 @@ function AuthedApp({ user }: { user: User }) {
             flowType={state.flowType}
             patient={state.activePatient}
             sessionCount={state.activeSessionCount}
+            initialSource={state.flowSource}
             onClose={() => state.close()}
             onDraftReady={({ title, body }) => {
               state.setDraft({
@@ -266,8 +267,7 @@ function AuthedApp({ user }: { user: User }) {
             onClose={() => state.close()}
             refreshPatients={state.refreshPatients}
             openPatient={state.openPatient}
-            setDraft={state.setDraft}
-            goDraft={() => state.go('draft')}
+            startSummaryFlow={(source) => state.openFlow('summary', source)}
             showToast={state.showToast}
           />
         )}

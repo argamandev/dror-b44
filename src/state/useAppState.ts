@@ -61,6 +61,10 @@ export function useAppState() {
   // Profile (mock's draftFrom, v2 diff).
   const [draftFrom, setDraftFrom] = useState<'profile' | 'world'>('profile');
   const [flowType, setFlowType] = useState<Draft['type']>('summary');
+  // A transcript handed to the summary flow from outside it — the home orb's
+  // recording, once it has been assigned to a patient. Empty for a flow the
+  // therapist starts from the patient's own profile.
+  const [flowSource, setFlowSource] = useState('');
   const [toast, setToast] = useState<string | null>(null);
   const [homeOrb, setHomeOrb] = useState<'idle' | 'thinking'>('idle');
   const [activeChat, setActiveChat] = useState<ActiveChat>(EMPTY_CHAT);
@@ -167,9 +171,13 @@ export function useAppState() {
 
   // Profile's two "יצירת..." buttons both open the flow overlay, differing
   // only in which path it starts on (mock's startFlow, line 669).
+  // `source` seeds the summary flow with an already-captured transcript
+  // (home-screen recording); omitted, the flow starts at its first step as
+  // it always has.
   const openFlow = useCallback(
-    (type: Draft['type']) => {
+    (type: Draft['type'], source = '') => {
       setFlowType(type);
+      setFlowSource(source);
       setOverlay('flow');
     },
     []
@@ -412,6 +420,7 @@ export function useAppState() {
     draft,
     draftFrom,
     flowType,
+    flowSource,
     toast,
     activePatient,
     activeSessionCount,

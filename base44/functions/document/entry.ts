@@ -49,6 +49,52 @@ function styleInstruction(style: string | undefined): string {
   }
 }
 
+// Per-type body structure. The letter chrome (לכבוד / הנדון / תאריך / בכבוד
+// רב) is identical for every official document; only the body's sections
+// differ by type, so adding a new type is one entry in this table. A type
+// with no entry keeps the free-form single-body-paragraph shape.
+interface DocSection {
+  heading: string;
+  hint: string;
+}
+
+const DOC_STRUCTURES: { matches: (docType: string) => boolean; sections: DocSection[] }[] = [
+  {
+    // מכתב קליני לצבא
+    matches: (t) => t.includes("צבא") || t.includes('צה"ל') || t.includes("מיטב"),
+    sections: [
+      {
+        heading: "רקע",
+        hint: "כמה זמן המטופל/ת נמצא/ת בטיפול, היסטוריה טיפולית רלוונטית, אבחנות קודמות וכדומה",
+      },
+      {
+        heading: "הערכת מצב תפקודי",
+        hint: "תיאור אופן התפקוד של המטופל/ת, והאם המצב הנפשי יוצר קושי תפקודי; אם עולה בחומר סוגיית מסוכנות — יש להתייחס אליה כאן",
+      },
+      { heading: "המלצה", hint: "המלצה מסכמת הנובעת מהרקע ומהערכת המצב שלמעלה" },
+    ],
+  },
+  {
+    // מכתב לביטוח לאומי
+    matches: (t) => t.includes("ביטוח לאומי") || t.includes("ביטוח־לאומי"),
+    sections: [
+      {
+        heading: "רקע",
+        hint: "כמה זמן המטופל/ת נמצא/ת בטיפול, היסטוריה טיפולית רלוונטית, אבחנות קודמות וכדומה",
+      },
+      {
+        heading: "אבחנות קליניות",
+        hint: "האבחנות הקליניות העולות מהרשומות, וכן תיאור האופן שבו הן משפיעות על המטופל/ת ופוגעות בתפקודו/ה",
+      },
+      { heading: "המלצה", hint: "המלצה מסכמת הנובעת מהרקע ומהאבחנות שלמעלה" },
+    ],
+  },
+];
+
+function sectionsFor(docType: string): DocSection[] | null {
+  return DOC_STRUCTURES.find((s) => s.matches(docType))?.sections ?? null;
+}
+
 const PERSONA =
   "אתה דְּרוֹר, עוזר כתיבה קליני של פסיכולוג/ית פרטי/ת בישראל. תפקידך לנסח מסמך רשמי בעברית " +
   "בשם המטפל/ת (כגון אישור טיפול, מכתב לקופת חולים, מסמך אינטייק או חוות דעת), בטון מקצועי ורשמי, " +
@@ -192,6 +238,19 @@ Deno.serve(async (req: Request) => {
         : "\n\nלא נמצאו רשומות עבור הפגישות שנבחרו.";
     }
 
+    // Type-specific body (רקע / הערכת מצב תפקודי / המלצה וכו') when this
+    // document type has a defined structure; otherwise the free-form body
+    // paragraph the generic types have always used.
+    const sections = sectionsFor(docType);
+    const bodyBlock = sections
+      ? sections.map((s) => `${s.heading}\n<${s.hint}>`).join("\n\n")
+      : "<כאן, ורק כאן, לכתוב את גוף המסמך עצמו — פסקה אחת או יותר, המבוססת אך ורק על הרשומות שסופקו לעיל ומכוונת למטרה שצוינה. אם אין די רשומות כדי לבסס את המסמך, יש לציין זאת בעדינות בתוך הפסקה במקום להמציא פרטים>";
+    const bodyRule = sections
+      ? `- גוף המסמך בנוי מהסעיפים הבאים בלבד, לפי הסדר, כל כותרת בשורה נפרדת ואחריה התוכן, ושורה ריקה בין הסעיפים: ${sections
+          .map((s) => s.heading)
+          .join(" / ")}. אין להוסיף סעיפים ואין להשמיט סעיפים. כל סעיף מבוסס אך ורק על הרשומות שסופקו לעיל; אם אין די מידע לסעיף מסוים, יש לציין זאת בעדינות בתוכו במקום להמציא פרטים.`
+      : "";
+
     const prompt = `${PERSONA}
 כתוב ${docType} עבור התיק של ${name}, בשם המטפל/ת ${therapist}.
 ${patient.context_notes ? "הקשר קבוע מהמטפל/ת: " + patient.context_notes : ""}
@@ -206,7 +265,7 @@ ${styleLine}${purpose ? "מטרת המסמך והנחיות מהמטפל/ת למ
 
 תאריך: ${todayIL()}
 
-<כאן, ורק כאן, לכתוב את גוף המסמך עצמו — פסקה אחת או יותר, המבוססת אך ורק על הרשומות שסופקו לעיל ומכוונת למטרה שצוינה. אם אין די רשומות כדי לבסס את המסמך, יש לציין זאת בעדינות בתוך הפסקה במקום להמציא פרטים>
+${bodyBlock}
 
 בכבוד רב,
 ${therapist}
@@ -217,6 +276,7 @@ ${therapist}
 - השורות "הנדון:", "תאריך:" ו"בכבוד רב," חייבות להישאר מילה במילה כפי שמופיעות למעלה, כל אחת בשורה נפרדת משלה.
 - החתימה בסוף המסמך היא אך ורק "בכבוד רב," ואחריה שם המטפל/ת ואז "פסיכולוג/ית", כל אחד בשורה נפרדת — אסור להשתמש ב"בברכה" או בכל נוסח סיום אחר.
 - אסור לאחד את לכבוד/הנדון/תאריך/גוף המסמך/בכבוד רב לפסקה אחת רציפה — כל אחד מהם נשאר בשורה/שורות נפרדות שלו, בדיוק כפי שהודגם למעלה.
+${bodyRule}
 
 שדה title: שורת כותרת קצרה בלבד (למשל "${docType} — ${patient.first_name}"), בלי שאר הסעיפים.
 כתוב בעברית, בטון מקצועי ורשמי, ללא שימוש באימוג'י, וללא הוספת עובדות שאינן מופיעות ברשומות שסופקו כאן.`;
