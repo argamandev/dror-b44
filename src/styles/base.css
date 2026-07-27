@@ -25,6 +25,13 @@ html,body{
   overscroll-behavior:none;
 }
 
+/* THE WHITE BLOCK — the shell overflows the layout viewport by exactly the
+   strip iOS withholds from it (0 everywhere else; see src/ui/shellGap.ts for
+   the measurement and the why). body is position:fixed, so this paints past
+   the viewport edge without creating anything scrollable, and #root, AppFrame
+   and every `inset:0` layer inside it inherit the corrected height. */
+body{height:calc(100% + var(--shell-gap, 0px))}
+
 /* THE WHITE BLOCK, measured from the founder's screenshots (27.7): on his
    installed PWA the app shell ended 59px above the physical bottom edge — the
    dead strip below it is CANVAS, outside the layout viewport, so no element
@@ -34,8 +41,8 @@ html,body{
    The 59px is exactly this phone's safe-area-inset-TOP, which is the
    signature of the black-translucent status-bar style (index.html): iOS draws
    the web view under the status bar but does NOT grow the layout viewport, so
-   the space it borrowed at the top reappears as canvas at the bottom. See the
-   standalone override at the end of this file for the fix.
+   the space it borrowed at the top reappears as canvas at the bottom. The fix
+   is the --shell-gap rule below (src/ui/shellGap.ts).
    body keeps an opaque background as the safety net: if any device still
    leaves a strip uncovered, it shows the app's own base tone rather than the
    white slab. It sits UNDER the frame, so it is invisible whenever the frame
@@ -111,16 +118,6 @@ input,textarea,button{font-family:var(--font-sans)}
    hidden in standalone and left exactly as-is everywhere else. */
 @media (display-mode: standalone){
   .preview-only{display:none}
-
-  /* The white-block fix. In an installed iOS PWA with a black-translucent
-     status bar, BOTH `100%` and `100dvh` resolve to the layout viewport,
-     which is the screen MINUS the top safe area (measured: 873px of a 932px
-     screen). `vh` is the one unit that still reports the full screen there,
-     so it is what makes the shell — and with it every screen's background
-     layer and the bottom-anchored ChatBar — reach the physical bottom edge.
-     Scoped to standalone: in a browser the two agree, and 100vh would instead
-     mean the shell ignores retractable browser UI. */
-  html,body,#root{height:100vh}
 }
 
 @keyframes drFade{from{opacity:0}to{opacity:1}}
