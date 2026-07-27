@@ -13,8 +13,8 @@ with an AI button bolted on — it is an assistant that holds the therapist's ca
 answers grounded questions about it ("what did we work on with Itai last month?"), and, when asked,
 writes real clinical drafts into the record. Everything a therapist can see belongs to that
 therapist and no one else; every document Dror produces arrives as a draft the therapist reviews,
-edits and signs off. Open the live URL on a phone — the layout, the type and the voice loop were all
-designed for one hand and one thumb.
+edits and signs off. Open the live URL on a phone — the layout and the type were designed for one
+hand and one thumb, and the app installs to the home screen as a full-screen PWA.
 
 ---
 
@@ -31,7 +31,7 @@ here is a feature, not a footnote.
 What was built for the **Base44 Dev Build-Off** is the thing this repository contains: the entire
 backend — data model, access control, the agent, the AI functions, auth, hosting — rebuilt from
 nothing on Base44 during the build week. Git history starts on **2026-07-25**; every commit in this
-repository is dated 2026-07-25. Nothing was carried over from the existing product's stack. The
+repository is dated inside the build week. Nothing was carried over from the existing product's stack. The
 pitch is *"a founder rebuilds a validated product on Base44 in a week,"* never *"look what I
 invented this week."*
 
@@ -56,11 +56,17 @@ A walk in demo order.
 6. **The official-document flow** — pick a document type (אישור טיפול, מכתב לקופת חולים, …), state its
    purpose, choose which past sessions it may draw on, and get a formal Hebrew letter with the
    addressee line deliberately left blank for the therapist to fill.
-7. **Record from anywhere** — a global recorder that doesn't need a patient chosen first. Stop it,
-   assign it to an existing or brand-new patient, and it saves the recording *and* immediately drafts
-   a summary from the transcript.
-8. **Talk to Dror** — the orb opens a speech-to-speech conversation: Hebrew speech recognition →
-   the real agent → spoken reply → listens again, hands-free, between sessions.
+7. **Record from anywhere** — tap the orb: a session recorder that doesn't need a patient chosen
+   first. Stop it, assign it to an existing or brand-new patient, and it saves the recording *and*
+   immediately drafts a summary from the transcript. On browsers with no in-browser speech
+   recognition (iPhone), the audio is transcribed server-side after the fact — see the `stt`
+   function below.
+8. **Dictate instead of typing** — the mic in the chat bar turns Hebrew speech into text in the
+   input, editable before sending. Same engine split: live recognition where the browser has it,
+   the server path where it doesn't.
+9. **Upload documents into the record** — the + in the chat bar takes a PDF or a photographed
+   document, stores it in *private* storage, extracts its text with AI, and attaches it to a
+   patient as a `PatientDoc` — from that moment part of what Dror knows about them.
 
 ---
 
@@ -68,12 +74,12 @@ A walk in demo order.
 
 This is the part that was built this week, and it is where the interesting decisions are.
 
-### Three entities, per-therapist RLS from the first push
+### Four entities, per-therapist RLS from the first push
 
-`base44/entities/patient.jsonc`, `entry.jsonc`, `chat.jsonc`. Base44's rule is unforgiving and
-worth stating plainly: **an entity with no `rls` block is readable and writable by everyone,
-including anonymous visitors.** For a clinical product that is not a default to discover later. All
-three entities shipped with the same block from their very first push:
+`base44/entities/patient.jsonc`, `entry.jsonc`, `chat.jsonc`, `patient-doc.jsonc`. Base44's rule is
+unforgiving and worth stating plainly: **an entity with no `rls` block is readable and writable by
+everyone, including anonymous visitors.** For a clinical product that is not a default to discover
+later. All four entities shipped with the same block from their very first push:
 
 ```jsonc
 "rls": {
@@ -88,7 +94,8 @@ Scoping is therefore enforced by the platform on every read and write, including
 agent and by backend functions, not by application code that could forget. `Patient` holds identity
 and standing context; `Entry` is the single record type for summaries, documents and recordings
 (`type` + `is_draft`); `Chat` persists conversation history alongside the resumable agent
-`conversation_id`.
+`conversation_id`; `PatientDoc` holds an uploaded document's private-storage `file_uri` and its
+AI-extracted text.
 
 ### The `dror` agent — and why it can only write drafts
 
@@ -97,9 +104,10 @@ Its tools are entity tools, deliberately asymmetric:
 
 ```jsonc
 "tool_configs": [
-  { "entity_name": "Patient", "allowed_operations": ["read"] },
-  { "entity_name": "Entry",   "allowed_operations": ["read", "create"] },
-  { "entity_name": "Chat",    "allowed_operations": ["read"] }
+  { "entity_name": "Patient",    "allowed_operations": ["read"] },
+  { "entity_name": "Entry",      "allowed_operations": ["read", "create"] },
+  { "entity_name": "Chat",       "allowed_operations": ["read"] },
+  { "entity_name": "PatientDoc", "allowed_operations": ["read"] }
 ]
 ```
 
@@ -131,7 +139,7 @@ and today's date, and the agent resolves records from there through its own tool
 |---|---|---|
 | `summarize` | `base44/functions/summarize/entry.ts` | Hebrew session summary from a transcript or typed notes |
 | `document` | `base44/functions/document/entry.ts` | Formal Hebrew clinical letter from selected sessions |
-| `tts` | `base44/functions/tts/entry.ts` | Dror's spoken voice for the conversation overlay |
+| `stt` | `base44/functions/stt/entry.ts` | Server-side Hebrew transcription (ElevenLabs) for browsers without in-browser speech recognition |
 
 Each runs on Deno and starts the same way: `createClientFromRequest(req)`, which inherits the
 *caller's* auth. That single line is what makes context assembly safe — when `summarize` loads the
@@ -159,12 +167,12 @@ const priorSummaries = await base44.entities.Entry.filter(
 );
 ```
 
-`tts` reads its ElevenLabs key from platform secrets (`Deno.env.get("ELEVENLABS_API_KEY")`) so the
-key never reaches the browser, and returns a clean `503 no_key` when it isn't configured. The client
-(`src/api/tts.ts`) treats that as a signal, not an error, and falls back to the browser's own
-`speechSynthesis` Hebrew voice. **As of this deploy the key is not set**, so what you will hear in
-the live demo is the browser voice; setting the secret and redeploying switches the path with no code
-change.
+`stt` is auth-gated (`createClientFromRequest` → `auth.me()` → 401 for anonymous callers) and reads
+its ElevenLabs key from platform secrets (`Deno.env.get("ELEVENLABS_API_KEY")`) so the key never
+reaches the browser. It accepts recorded audio (capped at 15MB, `413` above it), transcribes it with
+ElevenLabs' `scribe_v1` model pinned to Hebrew, and returns `{ text }` — with a clean `503 no_key`
+when the secret isn't configured, which the client (`src/api/stt.ts`) surfaces as a typed error the
+recording and dictation flows branch on honestly instead of swallowing.
 
 ### Auth and hosting
 
@@ -211,13 +219,15 @@ to the authenticated therapist, so the worst case is a non-draft entry in that t
 not a cross-tenant leak. Server-side coercion of `is_draft` on agent-originated writes is on the
 roadmap below.
 
-**Browser speech APIs — disclosed.** Live Hebrew transcription (in the summary flow, the global
-recorder, and the voice conversation) uses the **Web Speech API**, which in Chrome routes captured
-audio to the *browser vendor's* speech service for recognition. That is a real third-party hop for
-session audio and it is named here rather than buried: Base44 has no native transcription or TTS
-integration today, so this was the only route to a working live-transcription demo inside the build
-week. Moving transcription to a platform-native or self-hosted path is the first item on the roadmap
-and would be a gate on any clinical deployment.
+**Speech and extraction vendors — disclosed.** Live Hebrew transcription (in the summary flow, the
+session recorder, and chat-bar dictation) uses the **Web Speech API** where the browser has it,
+which in Chrome routes captured audio to the *browser vendor's* speech service for recognition.
+Where the browser doesn't have it (iPhone), recorded audio goes to the auth-gated `stt` function and
+from there to **ElevenLabs** — a named vendor under an API agreement, reached only server-side.
+Document-upload text extraction uses Base44's `ExtractDataFromUploadedFile` integration, whose
+underlying AI provider the platform does not document — that is an open question flagged here rather
+than papered over. Consolidating all session audio onto the named server-side path is on the
+roadmap and would be a gate on any clinical deployment.
 
 **Model use.** Clinical text is sent to a model only to produce the draft the therapist explicitly
 asked for — no background analysis, no cross-patient mining, no consumer chat product in the loop.
@@ -240,26 +250,28 @@ verifying that contract is a pre-launch gate, not a claim to make here.
   │  base44Client.ts   createClient({ appId })     (single instance)     │
   │  data.ts           auth + Patient/Entry/Chat CRUD                    │
   │  ai.ts             askDror() · summarizeSession() · draftDocument()  │
-  │  tts.ts            speakHebrew()  → function, else browser voice     │
+  │  stt.ts            transcribeAudio() → stt function (typed errors)   │
+  │  docs.ts           private upload → signed url → AI text extraction  │
   │  format.ts         pure helpers (dates, names, session counts)       │
   └──────────────────────────────────────────────────────────────────────┘
          │                        │                          │
          ▼                        ▼                          ▼
    ENTITIES                    AGENT                     FUNCTIONS  (Deno)
    Patient                     dror                      summarize ─┐
-   Entry                       tools: Patient(r)         document  ─┤─ InvokeLLM
-   Chat                               Entry(r,create)               │  (+ json schema)
-                                      Chat(r)            tts ───────┘─ ElevenLabs
-   RLS: created_by ==          conversation API:                       (secret key)
-        {{user.email}}         create → addMessage                       ↓ 503 no_key
-        on every op            → subscribe / poll                    browser speech
+   Entry                       tools: Patient(r)         document  ─┴─ InvokeLLM
+   Chat                               Entry(r,create)                  (+ json schema)
+   PatientDoc                         Chat(r)            stt ────────  ElevenLabs
+                                      PatientDoc(r)                    (secret key,
+   RLS: created_by ==          conversation API:                        server-only,
+        {{user.email}}         create → addMessage                      503 no_key)
+        on every op            → subscribe / poll
 ```
 
 **The single-data-layer pattern.** Exactly one file constructs the SDK client, and exactly one
 directory imports it. No screen, overlay or hook ever reaches for `base44` directly — they call
 `listPatients()`, `askDror()`, `speakHebrew()`. This is what kept a week-long build honest: the
 entity shape, the agent transport quirks (raw axios responses, `.data` payloads, WebSocket
-subscriptions that need a poll backstop) and the TTS fallback chain are each solved once, in one
+subscriptions that need a poll backstop) and the transcription error taxonomy are each solved once, in one
 place, with the reasoning written next to the code. When a review found the session-numbering bug,
 there were two call sites to fix — not twenty.
 
@@ -276,7 +288,8 @@ npm run dev               # Vite dev server against the live Base44 backend
 Other commands:
 
 ```bash
-npm test                  # vitest — 13 tests (date/name/session-count helpers, chat scope derivation)
+npm test                  # vitest — 117 tests (format helpers, chat scoping, mic-error taxonomy,
+                          #   dictation + recorder gating, upload guards, Hebrew status lines, chrome color)
 npm run build             # production build into ./dist
 npx base44 deploy --yes   # entities → functions → agent → auth → site
 ```
@@ -293,8 +306,12 @@ cat scripts/verify-rls.ts | npx base44 exec   # the scripted half of the privacy
 
 ## Roadmap
 
-- **Platform-native transcription and TTS** — remove the browser-vendor speech hop for session audio,
-  and give Dror a consistent voice that doesn't depend on the device.
+- **All session audio on the named server-side path** — the `stt` function already covers browsers
+  without live recognition; consolidating every transcription onto it removes the browser-vendor
+  speech hop entirely.
+- **Speech-to-speech conversation with Dror** — a hands-free voice loop (Hebrew STT → agent →
+  spoken reply) was built during the week on ElevenLabs and then cut from the final scope to keep
+  the demo focused; it lives in git history and returns as the flagship interaction.
 - **Server-side draft coercion** — force `is_draft = true` on agent-originated writes in a backend
   function, turning the draft-only guarantee from instruction-enforced into platform-enforced.
 - **Agent function-tools** — give the agent the `summarize`/`document` functions as tools so a
