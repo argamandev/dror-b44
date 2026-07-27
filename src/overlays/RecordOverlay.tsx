@@ -10,6 +10,7 @@ import {
 } from '@/hooks/useSessionRecorder';
 import { getMicGuidance } from '@/hooks/micCopy';
 import type { Draft } from '@/state/useAppState';
+import { SUMMARY_STATUS_LINE } from '@/state/statusLine';
 
 // Ported verbatim from the design mock (lines 224-278, semantics 709/731-752).
 // Recording starts the instant the overlay opens (mock's openRecord, line
@@ -559,7 +560,7 @@ export default function RecordOverlay({
       {phase === 'generating' && (
         <div style={generatingWrapStyle}>
           <dror-orb size="120" state="thinking" />
-          <div style={generatingTextStyle}>דרור מנסח את הטיוטה…</div>
+          <div style={generatingTextStyle}>{SUMMARY_STATUS_LINE}</div>
         </div>
       )}
     </div>

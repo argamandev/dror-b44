@@ -10,6 +10,7 @@ import {
 } from '@/hooks/useSessionRecorder';
 import { isMicSupported } from '@/hooks/micAccess';
 import { getMicGuidance } from '@/hooks/micCopy';
+import { docStatusLine, SUMMARY_STATUS_LINE } from '@/state/statusLine';
 
 // Ported verbatim from the design mock (lines 335-401 for the summary path,
 // 402-443 for the doc path, 342-352/444-452 for the shared chrome — step
@@ -471,6 +472,10 @@ export default function FlowOverlay({
   const title = flowType === 'doc' ? 'מסמך רשמי' : 'סיכום פגישה';
   const sub = `עבור ${name}`;
   const backable = !generating && step > 1;
+  // Task W5.7: name the actual work in the generating-state status line
+  // rather than a generic "…את הטיוטה…" — which document type (docS1's
+  // chosen/typed docType) for the doc flow, the fixed summary line otherwise.
+  const generatingText = flowType === 'doc' ? docStatusLine(docType) : SUMMARY_STATUS_LINE;
 
   return (
     <div style={backdropStyle}>
@@ -708,7 +713,7 @@ export default function FlowOverlay({
         {generating && (
           <div style={generatingWrapStyle}>
             <dror-orb size="120" state="thinking" />
-            <div style={generatingTextStyle}>דרור מנסח את הטיוטה…</div>
+            <div style={generatingTextStyle}>{generatingText}</div>
           </div>
         )}
           </>
