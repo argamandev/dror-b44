@@ -253,10 +253,27 @@ export function useSessionRecorder(): SessionRecorder {
   // start() would overwrite streamRef/recorderRef with a fresh stream and
   // leak the old one (and its mic indicator) forever.
   const releaseMedia = useCallback(() => {
-    try {
-      recorderRef.current?.stop();
-    } catch {
-      /* ignore */
+    const recorder = recorderRef.current;
+    if (recorder) {
+      // Task W5.5 fix round 1 (review Important): cleared BEFORE stop() —
+      // MediaRecorder.stop() queues a final 'dataavailable' event (the
+      // ENTIRE un-timesliced recording, as one Blob) on whatever handler is
+      // still attached, fired asynchronously on the next tick. Left
+      // attached (as it was before this fix), that late flush pushed the
+      // full recording right back into chunksRef.current a moment after the
+      // synchronous clear below — on EVERY ordinary stop() (this is the
+      // live-transcript path's teardown, the majority case), silently
+      // parking tens of MB in memory until the next start()/unmount instead
+      // of actually releasing it. Nulling the handlers first makes that late
+      // flush a no-op.
+      recorder.ondataavailable = null;
+      recorder.onstop = null;
+      recorder.onerror = null;
+      try {
+        recorder.stop();
+      } catch {
+        /* ignore */
+      }
     }
     recorderRef.current = null;
     if (streamRef.current) {
