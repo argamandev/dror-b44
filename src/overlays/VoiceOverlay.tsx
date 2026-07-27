@@ -78,7 +78,10 @@ const contentStyle: CSSProperties = {
   animation: 'drRise 0.55s ease',
 };
 
-const orbWrapStyle: CSSProperties = { position: 'relative' };
+// cursor:pointer is not only the visual affordance for "tap me to finish
+// talking" (W5.3 review I2) — iOS Safari's click delegation to a plain <div>
+// is unreliable without it, and this is the only manual way to end a turn.
+const orbWrapStyle: CSSProperties = { position: 'relative', cursor: 'pointer' };
 
 const haloStyle: CSSProperties = {
   position: 'absolute',

@@ -124,4 +124,20 @@ export function unlockAudio(): void {
   // resume() covers a context that already existed and was suspended since.
   getSharedAudioContext();
   resumeSharedAudioContext();
+
+  // W5.3 review I1: speakHebrew falls back to the BROWSER voice whenever the
+  // tts function returns no audio (503 no_key / 502 / offline), and iOS gates
+  // speechSynthesis behind a first call inside a user gesture exactly like it
+  // gates <audio>. Without this, the fallback branch reproduces the original
+  // bug — "he doesn't respond at all" — on precisely the days the ElevenLabs
+  // key is missing or the network is down.
+  try {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      const synth = window.speechSynthesis;
+      synth.speak(new SpeechSynthesisUtterance(' '));
+      synth.cancel();
+    }
+  } catch {
+    /* ignore */
+  }
 }

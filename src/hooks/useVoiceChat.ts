@@ -172,6 +172,14 @@ const CAPTIONS: Record<VoicePhase, string> = {
 
 const VOICE_CHAT_TITLE = 'שיחה קולית עם דרור';
 
+// Spoken the moment the overlay opens, before any listening — the founder's
+// addition to W5.3: the orb shouldn't open into silence and wait to be spoken
+// to first. Deliberately NOT added to messagesRef: it isn't part of the agent
+// conversation (there is no conversationId yet), and recording it would make
+// every opened-and-immediately-closed overlay persist a Chat entity that
+// contains nothing but Dror greeting himself.
+const GREETING = 'היי, איך אני יכול לעזור?';
+
 // Speech-to-speech loop: capture one utterance (whichever engine this device
 // has — SpeechRecognition live, or Task W5.3's record-and-transcribe) -> on a
 // transcript, ask the real Dror agent (conversation kept across
@@ -182,7 +190,10 @@ const VOICE_CHAT_TITLE = 'שיחה קולית עם דרור';
 // mirrors FlowOverlay/RecordOverlay's closedRef pattern, StrictMode-safe (the
 // mount effect resets it, the cleanup sets it).
 export function useVoiceChat({ patientId, showToast }: UseVoiceChatArgs): UseVoiceChat {
-  const [phase, setPhase] = useState<VoicePhase>('listening');
+  // Opens on 'speaking', not 'listening': every mount starts with the greeting
+  // (see openWithGreeting), and initialising to 'listening' would flash
+  // "מקשיב…" for a frame before the mount effect corrected it.
+  const [phase, setPhase] = useState<VoicePhase>('speaking');
   const [lastUserText, setLastUserText] = useState('');
   const [micErrorKind, setMicErrorKind] = useState<MicErrorKind | null>(null);
   const [speechUnavailable, setSpeechUnavailable] = useState(false);
@@ -232,6 +243,11 @@ export function useVoiceChat({ patientId, showToast }: UseVoiceChatArgs): UseVoi
   // True when the user ended the turn by tapping — that audio is always worth
   // transcribing, even if the analyser heard very little.
   const manualStopRef = useRef(false);
+  // Identifies one mount of this hook. StrictMode mounts twice, and the first
+  // run's greeting is still awaiting playback when the second begins — without
+  // this the stale run would start listening UNDERNEATH the live run's
+  // greeting, and the recorded engine would transcribe Dror greeting himself.
+  const runIdRef = useRef(0);
 
   // Function DECLARATIONS (not consts) so startListening/createRecognitionInstance
   // /handleTurn can reference each other regardless of source order — hoisting
@@ -731,9 +747,33 @@ export function useVoiceChat({ patientId, showToast }: UseVoiceChatArgs): UseVoi
     }
   }, []);
 
+  // Dror speaks first, then listens. Capture deliberately does not start until
+  // playback has finished (or failed): on the recorded engine an open mic
+  // during the greeting would record Dror's own voice and send it back to be
+  // transcribed. A TTS failure is not surfaced — it just means the
+  // conversation starts a beat earlier.
+  //
+  // This also lands the greeting inside the iOS gesture's slipstream: it is the
+  // first real playback after the orb tap, which is the strongest possible
+  // unlock. unlockAudio() stays as belt-and-braces for the browser-voice
+  // fallback path.
+  async function openWithGreeting(runId: number) {
+    setPhase('speaking');
+    try {
+      await speakHebrew(GREETING);
+    } catch {
+      /* best-effort — the loop matters more than the greeting */
+    }
+    // Closed mid-greeting (stopSpeaking already cancelled playback), or
+    // superseded by a newer mount — either way this run must not start a mic.
+    if (closedRef.current || runId !== runIdRef.current) return;
+    startListening();
+  }
+
   useEffect(() => {
     closedRef.current = false;
-    if (supported) startListening();
+    const runId = ++runIdRef.current;
+    if (supported) void openWithGreeting(runId);
     return () => {
       stop();
     };
