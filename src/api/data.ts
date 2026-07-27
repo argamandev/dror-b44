@@ -61,6 +61,12 @@ export const auth = {
   verifyOtp: (email: string, otp: string): Promise<void> =>
     base44.auth.verifyOtp({ email, otpCode: otp }).then(() => undefined),
 
+  // Sends the reset email. The rest of the flow (the token link, setting the
+  // new password) happens on Base44's own page, so the app has nothing to
+  // render for it — Login just confirms the mail went out.
+  requestPasswordReset: (email: string): Promise<void> =>
+    base44.auth.resetPasswordRequest(email).then(() => undefined),
+
   logout: (): Promise<void> => {
     base44.auth.logout();
     return Promise.resolve();

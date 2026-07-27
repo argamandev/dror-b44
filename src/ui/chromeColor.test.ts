@@ -35,8 +35,16 @@ describe('computeChromeColor', () => {
     expect(computeChromeColor('home', null)).toBe('#6b71f6');
   });
 
-  it('login/loading is the flat warm background', () => {
-    expect(computeChromeColor('login', null)).toBe('#faf8fa');
+  it('login/loading opens on the same hero as home, so it takes the same indigo', () => {
+    expect(computeChromeColor('login', null)).toBe('#6b71f6');
+    expect(computeChromeColor('login', null)).toBe(computeChromeColor('home', null));
+  });
+
+  it('the signing-in veil is near-black at the top, where its own glow has run out', () => {
+    // R: 10*0.97 + 107*0.03 = 12.91 -> 13 -> 0x0d
+    // G: 10*0.97 + 113*0.03 = 13.09 -> 13 -> 0x0d
+    // B: 12*0.97 + 246*0.03 = 19.02 -> 19 -> 0x13
+    expect(computeChromeColor('signingIn', null)).toBe('#0d0d13');
   });
 
   it('the dark-backdrop overlays (search, record, flow, settings) use the dark tone', () => {
@@ -56,41 +64,60 @@ describe('computeChromeColor', () => {
   });
 });
 
-const SHADOW = 'linear-gradient(to bottom, rgba(0,0,0,0.043) 0, rgba(0,0,0,0) 13px)';
-
 describe('computeStripBackground', () => {
   it('gives each screen the flat base its gradient has faded to by the bottom', () => {
-    expect(computeStripBackground('home', null)).toBe(`${SHADOW}, #faf8fa`);
-    expect(computeStripBackground('profile', null)).toBe(`${SHADOW}, #faf8fa`);
-    expect(computeStripBackground('world', null)).toBe(`${SHADOW}, #faf8fa`);
-    expect(computeStripBackground('chat', null)).toBe(`${SHADOW}, #fbfafb`);
-  });
-
-  // AppFrame clips the ChatBar's shadow at the frame's bottom edge; the strip
-  // finishes the fade so the two read as one surface instead of a block.
-  it('carries the ChatBar shadow past the seam, over the screen base', () => {
-    const home = computeStripBackground('home', null);
-    expect(home.startsWith('linear-gradient(to bottom, rgba(0,0,0,0.043)')).toBe(true);
-    expect(home.endsWith('#faf8fa')).toBe(true);
-  });
-
-  it('omits the shadow where no ChatBar is rendered to cast it', () => {
-    // DraftEditor (App.tsx `showChatBar`) and Login (outside AppFrame).
-    expect(computeStripBackground('draft', null)).toBe('#fbfafb');
+    expect(computeStripBackground('home', null)).toBe('#faf8fa');
+    expect(computeStripBackground('profile', null)).toBe('#faf8fa');
+    expect(computeStripBackground('world', null)).toBe('#faf8fa');
+    expect(computeStripBackground('chat', null)).toBe('#fbfafb');
+    // Login's bottom glow is lifted by --shell-gap, so its last rows are the
+    // flat base too — same value, reached a different way.
     expect(computeStripBackground('login', null)).toBe('#faf8fa');
   });
 
-  it('continues a dark overlay scrim rather than leaving a light block under it', () => {
-    expect(computeStripBackground('home', 'record')).toBe('#4a4a52');
-    expect(computeStripBackground('profile', 'flow')).toBe('#4a4a52');
+  it('carries the signing-in veil down into the strip instead of the login base', () => {
+    expect(computeStripBackground('signingIn', null)).toBe('#3c3f74');
+    expect(computeStripBackground('signingIn', null)).not.toBe(
+      computeStripBackground('login', null)
+    );
   });
 
-  it('splits the menu strip where the drawer panel meets the app peek', () => {
-    // R: 23*0.42 + 250*0.58 = 154.66 -> 155 -> 0x9b
-    // G: 23*0.42 + 248*0.58 = 153.5  -> 154 -> 0x9a
-    // B: 27*0.42 + 250*0.58 = 156.34 -> 156 -> 0x9c
-    expect(computeStripBackground('home', 'menu')).toBe(
-      'linear-gradient(to right, #9b9a9c 0 14%, #fbf6ef 14% 100%)'
+  // Measured 27.7: the record scrim's real bottom edge was #69686e while the
+  // strip beside it sat at the old flat #4a4a52 — a top-of-viewport value,
+  // where the scrim covers the gradient's blue peak instead of the flat base
+  // it has faded to down here.
+  it('composites each overlay scrim over the base of the screen behind it', () => {
+    // R: 23*0.62 + 250*0.38 = 109.26 -> 109 -> 0x6d
+    // G: 23*0.62 + 248*0.38 = 108.5  -> 109 -> 0x6d
+    // B: 27*0.62 + 250*0.38 = 111.74 -> 112 -> 0x70
+    expect(computeStripBackground('home', 'record')).toBe('#6d6d70');
+    // The lighter 0.55 scrim every other overlay uses, same #faf8fa base.
+    expect(computeStripBackground('profile', 'flow')).toBe('#7d7c7f');
+  });
+
+  it('follows the screen behind the overlay, not just the overlay', () => {
+    // chat's base is #fbfafb, one level up from home's — the strip tracks it.
+    expect(computeStripBackground('chat', 'search')).not.toBe(
+      computeStripBackground('home', 'search')
     );
+  });
+
+  // THE STRIP TAKES FLAT COLORS ONLY: body's box ends at the seam, so only a
+  // propagated background-color reaches the canvas below it. The split
+  // gradient this used to return never painted — the founder's drawer
+  // screenshot measured #dedbf0 there, which is computeChromeColor(_, 'menu'),
+  // i.e. the canvas falling through to <html>'s status-bar color.
+  it('gives the drawer strip the panel ivory, as a flat color', () => {
+    expect(computeStripBackground('home', 'menu')).toBe('#fbf6ef');
+  });
+
+  it('never returns a gradient — a gradient here is a silent no-op', () => {
+    const screens = ['home', 'profile', 'world', 'chat', 'draft', 'login', 'signingIn'] as const;
+    const overlays = [null, 'menu', 'record', 'search', 'flow', 'settings', 'appSettings'] as const;
+    for (const screen of screens) {
+      for (const overlay of overlays) {
+        expect(computeStripBackground(screen, overlay)).toMatch(/^#[0-9a-f]{6}$/);
+      }
+    }
   });
 });

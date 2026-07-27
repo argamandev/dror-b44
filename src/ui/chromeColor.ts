@@ -1,5 +1,4 @@
 import type { Overlay, Screen } from '@/state/useAppState';
-import { DRAWER_WIDTH_PCT } from '@/overlays/MenuDrawer';
 
 // Wave 4 Issue A ("dynamic chrome blending"): the founder's iPhone screenshot
 // showed a light band above Home's gradient under the status bar, and
@@ -60,10 +59,11 @@ export function blendOver(fgRgba: RgbaColor, bgHex: string): string {
   return `#${channelToHex(r)}${channelToHex(g)}${channelToHex(b)}`;
 }
 
-// The one pseudo-"screen" that isn't part of useAppState's Screen union:
+// The two pseudo-"screens" that aren't part of useAppState's Screen union:
 // App.tsx renders Login (and the pre-auth loading spinner) before any
-// `useAppState` exists at all.
-export type ChromeScreen = Screen | 'login';
+// `useAppState` exists at all, and Login raises its own full-viewport
+// signing-in veil while the auth call is in flight.
+export type ChromeScreen = Screen | 'login' | 'signingIn';
 
 interface ScreenColorSpec {
   fg: RgbaColor;
@@ -109,9 +109,19 @@ const SCREEN_COLOR_SPECS: Record<ChromeScreen, ScreenColorSpec> = {
   // #fbfafb (wrapStyle).
   draft: { fg: { r: 107, g: 113, b: 246, a: 0.45 }, bg: '#fbfafb' },
   // Login (outside AppFrame) and the pre-auth loading spinner (AppFrame with
-  // no screen content yet) are both flat var(--bg-warm) — alpha 1 so
-  // blendOver just returns it untouched.
-  login: { fg: { r: 250, g: 248, b: 250, a: 1 }, bg: '#faf8fa' },
+  // no screen content yet). Both were flat var(--bg-warm) until Login was
+  // rebuilt from the design project's entry page: it now opens on the same
+  // dawn hero as Home, whose peak stop is opaque, so the status bar over it is
+  // the same indigo. The loading spinner was given the identical background
+  // layer in App.tsx rather than a second ChromeScreen entry — the two states
+  // are a fifth of a second apart and any difference would read as a flash.
+  login: { fg: { r: 107, g: 113, b: 246, a: 1 }, bg: '#6b71f6' },
+  // Login's signing-in veil (Login.tsx signingInStyle) covers the whole
+  // viewport. At y=0 the veil's own radial is long past its last stop, so what
+  // is left is its outermost rgba(10,10,12,0.97) over the hero above. The
+  // rgba(12,12,14,0.92) base layer between them is dropped: at 97% opacity it
+  // moves the result by under six levels of near-black.
+  signingIn: { fg: { r: 10, g: 10, b: 12, a: 0.97 }, bg: '#6b71f6' },
 };
 
 // Task W5.9: the menu drawer is the one overlay that is NOT a dark backdrop.
@@ -152,54 +162,62 @@ const SCREEN_STRIP: Record<ChromeScreen, string> = {
   world: '#faf8fa',
   chat: '#fbfafb',
   draft: '#fbfafb',
+  // Login's bottom glow is lifted by --shell-gap (Login.tsx bottomGlowStyle),
+  // exactly as Profile's is, so the screen's last rows are the flat base too.
   login: '#faf8fa',
+  // The signing-in veil is the one surface whose bottom edge is a live
+  // gradient — its dawn glow rises from 50% 106%, so the strip is brightest
+  // indigo-violet at the centre (#3f427c) and nearly the flat dark at the
+  // corners (#32343e). No flat value serves both, and flat is all the strip
+  // takes (see MENU_STRIP below). This is the value a quarter of the way out
+  // from the centre, which is where the eye is while the orb spins.
+  signingIn: '#3c3f74',
 };
 
 // The menu is the one surface that is two surfaces: the ivory panel over the
-// right DRAWER_WIDTH_PCT of the column, the dimmed app peeking on the left. A
-// flat color would break the seam under one or the other, so the strip is
-// split at the same percentage the panel is. Left: the scrim
-// (rgba(23,23,27,0.42), MenuDrawer) over a screen's #faf8fa base. Right: the
-// panel's ivory, its dawn glow long since faded at this height.
-const MENU_PEEK = blendOver({ r: 23, g: 23, b: 27, a: 0.42 }, '#faf8fa');
-const MENU_PANEL = '#fbf6ef';
-const MENU_STRIP = `linear-gradient(to right, ${MENU_PEEK} 0 ${100 - DRAWER_WIDTH_PCT}%, ${MENU_PANEL} ${100 - DRAWER_WIDTH_PCT}% 100%)`;
+// right DRAWER_WIDTH_PCT of the column, the dimmed app peeking on the left.
+// This used to be split at the same percentage, with a linear-gradient — and
+// that silently did nothing. THE STRIP TAKES FLAT COLORS ONLY.
+//
+// Measured on the founder's drawer screenshot (27.7): the strip came out
+// #dedbf0 across its whole width — neither half of the split, but exactly
+// computeChromeColor(screen, 'menu'), the value this module writes to <html>
+// for the status bar. body's box ends at the seam (position:fixed, base.css),
+// so what reaches the canvas below it is a PROPAGATED background; a flat
+// background-color propagates, a gradient image does not, and the canvas
+// falls through to <html>'s color instead. Anything but a plain color here is
+// a no-op that will quietly show the status-bar tone at the opposite edge of
+// the screen.
+//
+// So: the panel's ivory, its dawn glow long since faded at this height. It
+// covers the DRAWER_WIDTH_PCT the panel itself covers; the remaining sliver
+// of peek is 14% of a 59px strip in the corner, and no flat value can serve
+// both halves.
+const MENU_STRIP = '#fbf6ef';
 
-// ---- Carrying the ChatBar's shadow across the seam ----
+// The strip under a dark overlay is NOT OVERLAY_DARK. That constant is a
+// top-of-viewport value: up there the scrim covers each screen's gradient at
+// its blue PEAK, so it composites dark. Down here the same scrim covers the
+// flat base the gradient has long since faded to, which is far lighter — one
+// constant cannot serve both edges of the screen.
 //
-// Matching the strip's COLOUR to the screen turned out not to be enough (the
-// founder's zoomed screenshot, 27.7). AppFrame is `overflow:hidden`, so the
-// ChatBar's `0 10px 30px rgba(0,0,0,0.10)` is clipped dead at the frame's
-// bottom edge — and on a phone with the strip, --chatbar-bottom floors at
-// 12px, which leaves the shadow still ~45% of the way through its fade when
-// it hits the cut. Measured either side of the seam at 3x zoom: directly
-// under the bar #efedf0 above the line, #faf8fa below it, a razor-straight
-// full-width edge; beside the bar, no edge at all. Both areas were already
-// the same colour — what read as "a white block stuck under the panel" was
-// the missing shadow, not a mismatched tone.
-//
-// So the strip finishes the fade the frame cut off. Two measured numbers:
-//
-//   alpha  the shadow's strength where it is clipped. A 30px blur centred on
-//          the bar's bottom edge + 10px offset spans card_bottom-5 to
-//          card_bottom+25, so at +12px it is (25-12)/30 = 43% of 0.10 —
-//          0.043, matching the #efedf0 sampled there.
-//   depth  what is left of it: 25 - 12 = 13px.
-//
-// Both assume the 12px floor, which is the only case that can be seen: the
-// strip exists ONLY when --shell-gap > 0, and the gap is the status-bar inset
-// (47-62px on the iPhone line), always enough to drive --chatbar-bottom to
-// its floor. Where there is no gap the frame reaches the physical edge, body
-// is covered, and this paints nothing.
-//
-// Full-width, where the real shadow tapers off past the bar's 15px side
-// insets — the same "close enough to kill the seam" trade the top-of-viewport
-// table above makes.
-const CHATBAR_SHADOW = 'linear-gradient(to bottom, rgba(0,0,0,0.043) 0, rgba(0,0,0,0) 13px)';
+// Measured on the founder's record screen (27.7): the scrim's real bottom
+// edge #69686e against the strip's #4a4a52 — 31 levels, a dark slab bolted
+// under the app. Compositing each overlay's OWN scrim alpha over the screen's
+// own strip base instead gives #6d6d70 for that case; the ~4-level residual
+// is the backdrop blur pulling light in through the scrim, invisible next to
+// the 31 it replaces.
+const SCRIM_BLACK = { r: 23, g: 23, b: 27 };
 
-// The screens with no ChatBar to cast it: DraftEditor (App.tsx's
-// `showChatBar`) and Login, which renders outside AppFrame entirely.
-const NO_CHATBAR: ChromeScreen[] = ['draft', 'login'];
+// Each overlay's scrim alpha, from its own backdrop style. The menu is absent
+// on purpose — it is a light panel, handled by MENU_STRIP above.
+const SCRIM_ALPHA: Record<Exclude<NonNullable<Overlay>, 'menu'>, number> = {
+  record: 0.62, // RecordOverlay.tsx (recordScrim)
+  search: 0.55, // SearchOverlay.tsx
+  flow: 0.55, // FlowOverlay.tsx
+  settings: 0.55, // PatientContextOverlay.tsx
+  appSettings: 0.55, // AppSettingsOverlay.tsx
+};
 
 /**
  * What to paint in the strip below the shell for a given (screen, overlay)
@@ -207,14 +225,11 @@ const NO_CHATBAR: ChromeScreen[] = ['draft', 'login'];
  */
 export function computeStripBackground(screen: ChromeScreen, overlay: Overlay | null): string {
   if (overlay === 'menu') return MENU_STRIP;
-  // Every other overlay lays its scrim across the whole frame, so the strip
-  // continues it.
-  if (overlay) return OVERLAY_DARK;
   const base = SCREEN_STRIP[screen];
-  if (NO_CHATBAR.includes(screen)) return base;
-  // Layered: the gradient is a background IMAGE over the flat colour, so the
-  // shadow rides on top of the screen's own base tone rather than replacing it.
-  return `${CHATBAR_SHADOW}, ${base}`;
+  // Every other overlay lays its scrim across the whole frame, so the strip
+  // continues it — over the base of whichever screen is behind it.
+  if (overlay) return blendOver({ ...SCRIM_BLACK, a: SCRIM_ALPHA[overlay] }, base);
+  return base;
 }
 
 /** Computes the top-of-viewport color for a given (screen, overlay) pair — pure, no DOM access. */

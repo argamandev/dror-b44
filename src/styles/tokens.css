@@ -3,6 +3,12 @@
   --bg:#fafafa; --bg-warm:#faf8fa; --bg-chat:#fbfafb;
   --accent:#6B71F6; --accent-soft:#A9B9F9; --blush:#F0E4E8; --cream:#F6D9C4; --ivory:#FBF6EF;
   --grad-hero:radial-gradient(108% 52% at 50% -4%, rgba(107,113,246,1) 0%, rgba(107,113,246,0.94) 16%, rgba(169,185,249,0.92) 42%, rgba(240,228,232,0.78) 62%, rgba(246,217,196,0.5) 74%, rgba(246,217,196,0) 85%);
+  /* The entry page's hero (Login.tsx + the pre-auth spinner in App.tsx, which
+     share it so the handoff between them doesn't flash). Same geometry and
+     same peak stop as --grad-hero, every later stop a little weaker: Login is
+     the one screen that lays a form full of 11px labels over the gradient's
+     brightest half. */
+  --grad-hero-login:radial-gradient(108% 52% at 50% -4%, rgba(107,113,246,1) 0%, rgba(107,113,246,0.94) 15%, rgba(169,185,249,0.9) 40%, rgba(240,228,232,0.7) 60%, rgba(246,217,196,0.42) 73%, rgba(246,217,196,0) 86%);
   --font-serif:'Frank Ruhl Libre',serif; --font-sans:Assistant,-apple-system,sans-serif;
   /* Task W5.8: the ONLY two places in the app that read env(). Everything
      else consumes these vars, so the safe areas can be simulated (and the
@@ -23,9 +29,18 @@
      design margin is measured from the wrong place — 44px inside the frame
      would leave the bar 44 + the strip above the real bottom, and iOS clips
      anything reaching into the strip anyway. Subtracting the strip keeps the
-     bar the SAME distance from the physical edge as everywhere else, with
-     12px of frame always left below it so the rounded corner never lands on
+     bar the SAME distance from the physical edge as everywhere else, with a
+     floor of frame always left below it so the rounded corner never lands on
      the seam. --shell-gap is 0 on every device without the quirk, where this
-     collapses back to the plain max(). */
-  --chatbar-bottom:max(12px, calc(max(44px, var(--bottom-inset)) - var(--shell-gap, 0px)));
+     collapses back to the plain max().
+     That floor is 26px, not the 12px it started as, because the frame is
+     `overflow:hidden` (AppFrame.tsx) and so CLIPS the bar's own shadow at the
+     seam. `0 10px 30px` reaches 25px below the bar (offset + half the blur),
+     and at 12px of clearance it was being cut while still at ~43% strength —
+     a razor-straight full-width line under the panel, measured either side of
+     it as #eeecef against #faf8fa (the founder's 3x screenshot, 27.7). 26px
+     lets the shadow finish INSIDE the frame, so there is nothing left at the
+     edge to clip. Anything bottom-anchored that grows a shadow past 25px has
+     to raise this floor to match. */
+  --chatbar-bottom:max(26px, calc(max(44px, var(--bottom-inset)) - var(--shell-gap, 0px)));
 }

@@ -361,10 +361,22 @@ export default function App() {
   if (loading) {
     return (
       <AppFrame>
+        {/* The same hero Login opens on (--grad-hero-login, tokens.css), so
+            the spinner is the entry page with its content not yet decided
+            rather than a separate flat screen flashing past it. */}
         <div
           style={{
             position: 'absolute',
             inset: 0,
+            zIndex: 0,
+            background: 'var(--grad-hero-login), #faf8fa',
+          }}
+        />
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 1,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
