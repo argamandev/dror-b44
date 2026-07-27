@@ -61,10 +61,11 @@ export function useAppState() {
   // Profile (mock's draftFrom, v2 diff).
   const [draftFrom, setDraftFrom] = useState<'profile' | 'world'>('profile');
   const [flowType, setFlowType] = useState<Draft['type']>('summary');
-  // A transcript handed to the summary flow from outside it — the home orb's
-  // recording, once it has been assigned to a patient. Empty for a flow the
-  // therapist starts from the patient's own profile.
-  const [flowSource, setFlowSource] = useState('');
+  // Set when the summary flow was entered from a finished recording (the home
+  // orb's, once assigned to a patient): the transcript, or '' when that
+  // recording produced no text. null means an ordinary flow started from the
+  // patient's own profile.
+  const [flowSource, setFlowSource] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [homeOrb, setHomeOrb] = useState<'idle' | 'thinking'>('idle');
   const [activeChat, setActiveChat] = useState<ActiveChat>(EMPTY_CHAT);
@@ -171,11 +172,11 @@ export function useAppState() {
 
   // Profile's two "יצירת..." buttons both open the flow overlay, differing
   // only in which path it starts on (mock's startFlow, line 669).
-  // `source` seeds the summary flow with an already-captured transcript
-  // (home-screen recording); omitted, the flow starts at its first step as
-  // it always has.
+  // `source` seeds the summary flow with an already-captured recording
+  // (home-screen); omitted, the flow starts at its first step as it always
+  // has.
   const openFlow = useCallback(
-    (type: Draft['type'], source = '') => {
+    (type: Draft['type'], source: string | null = null) => {
       setFlowType(type);
       setFlowSource(source);
       setOverlay('flow');

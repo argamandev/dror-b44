@@ -81,13 +81,20 @@ export const RECORDED_TRANSCRIPTION_FAILED_TOAST = 'דרור ניסה לתמלל
 /**
  * Pure decision (Task W5.5, TDD'd in useSessionRecorder.test.ts): should
  * stop() attempt server-side transcription of the recorded audio blob?
- * Requirement 3 — when live recognition delivered a transcript throughout,
- * `transcriptUnavailable` stays false and this is always false: the live
- * path is untouched, never double-transcribed. Requirement 2 — an empty or
- * over-the-gate blob keeps the existing honest no-transcript path instead.
+ *
+ * The gate is the live transcript itself, not the `transcriptUnavailable`
+ * error flag it used to be: iOS Safari's webkitSpeechRecognition regularly
+ * yields nothing at all while reporting no error (it is restarted after each
+ * silence timeout and simply never returns text while MediaRecorder holds
+ * the mic), and keying off the error flag meant those sessions silently
+ * ended with an empty transcript and no fallback — a saved recording and no
+ * summary. Any session that produced no usable live text now falls back to
+ * server-side transcription. When live recognition did deliver text, this
+ * stays false: that path is untouched and never double-transcribed. An empty
+ * or over-the-gate blob keeps the honest no-transcript path instead.
  */
-export function shouldTranscribeRecording(transcriptUnavailable: boolean, blobSize: number): boolean {
-  if (!transcriptUnavailable) return false;
+export function shouldTranscribeRecording(liveTranscript: string, blobSize: number): boolean {
+  if (liveTranscript.trim()) return false;
   if (blobSize <= 0) return false;
   return blobSize <= RECORDED_TRANSCRIPTION_MAX_BYTES;
 }
@@ -550,7 +557,10 @@ export function useSessionRecorder(): SessionRecorder {
     const run = async () => {
       stopRecognition();
 
-      const wantsRecordedTranscription = transcriptUnavailableRef.current;
+      // Whether the audio needs collecting is the same question the gate
+      // below asks — "did this session produce any live text?" — so it is
+      // asked the same way here, before the recorder is torn down.
+      const wantsRecordedTranscription = !transcriptRef.current.trim();
       let blob: Blob | null = null;
       if (wantsRecordedTranscription) {
         blob = await stopRecorderAndCollectBlob();
@@ -564,7 +574,7 @@ export function useSessionRecorder(): SessionRecorder {
       let finalTranscript = transcriptRef.current;
       let transcriptionFailed = false;
 
-      if (blob && shouldTranscribeRecording(wantsRecordedTranscription, blob.size)) {
+      if (blob && shouldTranscribeRecording(transcriptRef.current, blob.size)) {
         if (!closedRef.current) setTranscribing(true);
         try {
           const text = await transcribeAudio(blob);

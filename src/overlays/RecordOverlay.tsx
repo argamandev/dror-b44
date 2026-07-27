@@ -382,16 +382,12 @@ export default function RecordOverlay({
 
     if (closedRef.current) return;
 
-    if (!transcript.trim()) {
-      showToast('ההקלטה נשמרה בעולם של ' + fullName(patient));
-      await openPatient(patient.id);
-      onClose();
-      return;
-    }
-
-    // Make the patient active, then hand the transcript to their own summary
-    // flow — the drafting itself lives there and only there, so both entry
-    // points share one implementation and one result.
+    // Make the patient active, then continue in their own summary flow — the
+    // drafting itself lives there and only there, so both entry points share
+    // one implementation and one result. A recording that produced no text
+    // continues there too (on the notes step), rather than dead-ending as a
+    // saved recording with no summary.
+    showToast('ההקלטה נשמרה בעולם של ' + fullName(patient));
     await openPatient(patient.id);
     if (closedRef.current) return;
     startSummaryFlow(transcript);

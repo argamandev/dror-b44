@@ -15,32 +15,36 @@ import {
 // matching the convention set by useDictation.test.ts.
 
 describe('shouldTranscribeRecording', () => {
-  it('requirement 3 — never attempts when live recognition delivered a transcript throughout (transcriptUnavailable=false), no double transcription', () => {
-    expect(shouldTranscribeRecording(false, 1_000)).toBe(false);
+  it('requirement 3 — never attempts when live recognition delivered a transcript, so nothing is double-transcribed', () => {
+    expect(shouldTranscribeRecording('שלום, איך היה השבוע', 1_000)).toBe(false);
+  });
+
+  it('treats a whitespace-only live transcript as no transcript at all', () => {
+    expect(shouldTranscribeRecording('   \n  ', 1_000)).toBe(true);
+  });
+
+  it('attempts when live recognition returned nothing even though it reported no error (the iOS Safari case)', () => {
+    expect(shouldTranscribeRecording('', 2_000_000)).toBe(true);
   });
 
   it('does not attempt when there is no recorded audio at all (blob size 0)', () => {
-    expect(shouldTranscribeRecording(true, 0)).toBe(false);
+    expect(shouldTranscribeRecording('', 0)).toBe(false);
   });
 
   it('does not attempt for a negative/invalid size (defensive)', () => {
-    expect(shouldTranscribeRecording(true, -1)).toBe(false);
-  });
-
-  it('attempts when live recognition was unavailable and the blob is well within the size gate', () => {
-    expect(shouldTranscribeRecording(true, 2_000_000)).toBe(true);
+    expect(shouldTranscribeRecording('', -1)).toBe(false);
   });
 
   it('attempts exactly at the 15MB boundary (inclusive)', () => {
-    expect(shouldTranscribeRecording(true, RECORDED_TRANSCRIPTION_MAX_BYTES)).toBe(true);
+    expect(shouldTranscribeRecording('', RECORDED_TRANSCRIPTION_MAX_BYTES)).toBe(true);
   });
 
   it('requirement 2 — does not attempt one byte over the 15MB gate', () => {
-    expect(shouldTranscribeRecording(true, RECORDED_TRANSCRIPTION_MAX_BYTES + 1)).toBe(false);
+    expect(shouldTranscribeRecording('', RECORDED_TRANSCRIPTION_MAX_BYTES + 1)).toBe(false);
   });
 
-  it('does not attempt when both the availability gate and the size gate would independently fail', () => {
-    expect(shouldTranscribeRecording(false, RECORDED_TRANSCRIPTION_MAX_BYTES + 1)).toBe(false);
+  it('does not attempt when both the transcript gate and the size gate would independently fail', () => {
+    expect(shouldTranscribeRecording('יש טקסט חי', RECORDED_TRANSCRIPTION_MAX_BYTES + 1)).toBe(false);
   });
 });
 

@@ -27,13 +27,16 @@ interface FlowOverlayProps {
   /** This patient's non-draft session-summary count (mock's `p.sessions`) — sizes the docS3 meeting chips/subtitles. */
   sessionCount: number;
   /**
-   * A transcript captured elsewhere (the home orb's RecordOverlay, once it
-   * has been assigned to this patient). When set, the summary flow skips
-   * straight to step 3 with this text as its source, so a recording made
-   * from the home screen goes through this exact flow — same UI, same
-   * generation, same draft — instead of a parallel one.
+   * Set when this flow was entered from a recording made elsewhere (the home
+   * orb's RecordOverlay, once assigned to this patient) — the transcript, or
+   * '' when that recording produced no text. A recording made from the home
+   * screen therefore always continues in this exact flow (same UI, same
+   * generation, same draft) rather than a parallel one: with a transcript it
+   * opens on the guide step, without one it opens on the notes step so the
+   * therapist can write the points instead. null for an ordinary flow
+   * started from the patient's profile.
    */
-  initialSource?: string;
+  initialSource?: string | null;
   onClose: () => void;
   onDraftReady: (result: { title: string; body: string }) => void;
   showToast: (text: string) => void;
@@ -325,12 +328,20 @@ export default function FlowOverlay({
   const name = fullName(patient);
   const recorder = useSessionRecorder();
 
-  // Read once on mount: the seeded transcript is a starting condition, not a
+  // Read once on mount: the seeded recording is a starting condition, not a
   // live input — later prop changes must not yank the therapist mid-step.
-  const [seededSource] = useState(() => (initialSource ?? '').trim());
+  // null = ordinary flow; '' = came from a recording that yielded no text.
+  const [seed] = useState<string | null>(() => (initialSource == null ? null : initialSource.trim()));
+  const fromRecording = seed !== null;
+  const seededSource = seed ?? '';
+  // A recording with no transcript still continues here — on the notes step,
+  // where the therapist writes the points instead of retyping the flow.
+  const seededWithoutTranscript = fromRecording && !seededSource;
 
-  const [step, setStep] = useState<FlowStep>(seededSource ? 3 : 1);
-  const [method, setMethod] = useState<FlowMethod>(seededSource ? 'record' : null);
+  const [step, setStep] = useState<FlowStep>(seededSource ? 3 : fromRecording ? 2 : 1);
+  const [method, setMethod] = useState<FlowMethod>(
+    seededSource ? 'record' : fromRecording ? 'text' : null
+  );
   const [notes, setNotes] = useState('');
   const [guide, setGuide] = useState('');
   const [generating, setGenerating] = useState(false);
@@ -484,9 +495,9 @@ export default function FlowOverlay({
 
   const title = flowType === 'doc' ? 'מסמך רשמי' : 'סיכום פגישה';
   const sub = `עבור ${name}`;
-  // A seeded flow has no steps 1-2 to go back to — the recording already
-  // happened, in the overlay that handed the transcript over.
-  const backable = !generating && step > 1 && !seededSource;
+  // A flow entered from a recording has no earlier steps to go back to — the
+  // recording already happened, in the overlay that handed it over.
+  const backable = !generating && step > 1 && !fromRecording;
   // Task W5.7: name the actual work in the generating-state status line
   // rather than a generic "…את הטיוטה…" — which document type (docS1's
   // chosen/typed docType) for the doc flow, the fixed summary line otherwise.
@@ -607,6 +618,11 @@ export default function FlowOverlay({
 
         {!generating && flowType === 'summary' && isTextStep2 && (
           <div style={stepWrapStyle}>
+            {seededWithoutTranscript && (
+              <div style={guideLabelStyle}>
+                ההקלטה נשמרה בתיק, אבל לא הצלחנו לתמלל אותה — אפשר לכתוב כאן את הנקודות מהפגישה ודרור ימשיך מכאן.
+              </div>
+            )}
             <textarea
               dir="rtl"
               placeholder="נקודות עיקריות מהפגישה…"
